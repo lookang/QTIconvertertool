@@ -104,6 +104,142 @@
       justify-content: center; align-items: center;
     }
     .modal img { max-width: 90%; max-height: 90%; }
+
+    /* ── Review & Edit editor ────────────────────────────────────────── */
+    #editorSection {
+      display: none;
+      margin-top: 34px;
+      padding-top: 28px;
+      border-top: 2px solid #e5e7eb;
+    }
+    .editor-header-row {
+      display: flex; align-items: flex-start;
+      justify-content: space-between; gap: 12px;
+      margin-bottom: 4px;
+    }
+    .editor-header-row h2 { margin: 0 0 4px; font-size: 22px; }
+    .editor-subtitle { margin: 0; color: #6b7280; font-size: 14px; }
+    #editorQCount {
+      align-self: center; white-space: nowrap;
+      font-size: 13px; color: #9ca3af;
+      background: #f3f4f6; padding: 3px 10px; border-radius: 20px;
+    }
+
+    /* Question cards */
+    #questionCards { margin-top: 20px; }
+    .q-card {
+      border: 1.5px solid #e5e7eb;
+      border-radius: 14px;
+      padding: 20px 22px 16px;
+      margin-bottom: 14px;
+      background: #fff;
+      box-shadow: 0 1px 5px rgba(0,0,0,0.05);
+      transition: border-color .15s, box-shadow .15s;
+    }
+    .q-card:focus-within {
+      border-color: #3b82f6;
+      box-shadow: 0 0 0 3px rgba(59,130,246,.12), 0 2px 8px rgba(0,0,0,.06);
+    }
+    .q-card-header { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+    .q-num-badge {
+      background: #1e40af; color: #fff;
+      font-weight: 700; font-size: 12px;
+      padding: 3px 9px; border-radius: 6px;
+      letter-spacing: .4px;
+    }
+    .q-type-badge {
+      font-size: 11px; font-weight: 700; padding: 2px 7px;
+      border-radius: 4px; text-transform: uppercase; letter-spacing: .4px;
+    }
+    .q-type-badge.mcq   { background: #dbeafe; color: #1e40af; }
+    .q-type-badge.essay { background: #f3e8ff; color: #7c3aed; }
+
+    /* Stem segments */
+    .q-stem { margin-bottom: 12px; }
+    .stem-text {
+      min-height: 30px; padding: 7px 10px;
+      border: 1.5px solid transparent; border-radius: 7px;
+      line-height: 1.65; color: #1f2937; font-size: 15px;
+      font-family: inherit; outline: none;
+      transition: border-color .15s, background .15s;
+      word-break: break-word;
+    }
+    .stem-text:empty::before { content: attr(data-ph); color: #d1d5db; }
+    .stem-text:hover  { border-color: #d1d5db; background: #fafafa; }
+    .stem-text:focus  { border-color: #3b82f6; background: #f0f7ff; }
+    .stem-img {
+      display: block; max-width: 100%; max-height: 300px;
+      margin: 8px auto; border-radius: 8px;
+      border: 1px solid #e5e7eb; background: #f9fafb;
+    }
+    .stem-table {
+      border-collapse: collapse; margin: 8px 0;
+      font-size: 14px; max-width: 100%;
+    }
+    .stem-table td { border: 1px solid #d1d5db; padding: 5px 10px; line-height: 1.4; }
+
+    /* MCQ options */
+    .q-opts-label {
+      font-size: 11px; font-weight: 700; color: #9ca3af;
+      text-transform: uppercase; letter-spacing: .6px;
+      margin: 0 0 8px 2px;
+    }
+    .q-options { margin-top: 4px; }
+    .option-row {
+      display: flex; align-items: center;
+      gap: 9px; margin-bottom: 7px;
+    }
+    .opt-letter {
+      width: 26px; height: 26px; border-radius: 50%;
+      background: #f3f4f6; display: flex; align-items: center;
+      justify-content: center; font-weight: 700; font-size: 13px;
+      color: #374151; flex-shrink: 0;
+      transition: background .2s, color .2s;
+    }
+    .opt-letter.is-correct { background: #16a34a; color: #fff; }
+    .opt-input {
+      flex: 1; padding: 7px 11px;
+      border: 1.5px solid #e5e7eb; border-radius: 7px;
+      font-size: 14px; font-family: inherit; color: #1f2937;
+      transition: border-color .15s;
+    }
+    .opt-input:focus { outline: none; border-color: #3b82f6; }
+
+    /* Correct answer row */
+    .q-answer-row {
+      display: flex; align-items: center; gap: 10px;
+      margin-top: 12px; padding-top: 11px;
+      border-top: 1px dashed #e5e7eb;
+      font-size: 13px; color: #6b7280;
+    }
+    .answer-select {
+      padding: 5px 10px; border: 1.5px solid #e5e7eb;
+      border-radius: 7px; font-size: 14px; cursor: pointer;
+      background: #fff; transition: border-color .15s;
+    }
+    .answer-select:focus { outline: none; border-color: #3b82f6; }
+
+    /* Sticky export bar */
+    .editor-action-bar {
+      position: sticky; bottom: 0; z-index: 10;
+      background: #fff;
+      border-top: 2px solid #e5e7eb;
+      padding: 14px 0 0; margin-top: 20px;
+      display: flex; gap: 10px;
+      box-shadow: 0 -4px 16px rgba(0,0,0,.07);
+    }
+    .btn-export {
+      flex: 1; background: #16a34a; margin-top: 0;
+      font-size: 16px; font-weight: 600; letter-spacing: .3px;
+    }
+    .btn-export:hover { background: #15803d !important; }
+    .btn-reset {
+      flex: 0 0 auto; width: auto;
+      background: #6b7280; margin-top: 0;
+      font-size: 14px; padding: 12px 18px;
+    }
+    .btn-reset:hover { background: #4b5563 !important; }
+    .btn-export:disabled { opacity: .5; cursor: not-allowed; }
   </style>
 </head>
 <body>
@@ -132,6 +268,22 @@
   <button id="convertBtn" disabled>Convert Document</button>
   <div id="spinner">⏳ Converting… please wait</div>
   <div id="message"></div>
+
+  <!-- ── Review & Edit editor (shown after conversion) ───────────────── -->
+  <div id="editorSection">
+    <div class="editor-header-row">
+      <div>
+        <h2>✏️ Review &amp; Edit</h2>
+        <p class="editor-subtitle">Click any stem or option to edit · Images stay unchanged · Export when ready</p>
+      </div>
+      <span id="editorQCount"></span>
+    </div>
+    <div id="questionCards"></div>
+    <div class="editor-action-bar">
+      <button class="btn-export" id="exportBtn">📦 Export QTI ZIP</button>
+      <button class="btn-reset"  id="resetBtn">↩ New File</button>
+    </div>
+  </div>
 
   <div class="instructions">
     <h2>How to format your document</h2>
@@ -272,12 +424,11 @@ convertBtn.addEventListener('click', async () => {
       catch (e) { console.warn('MS parse failed:', e); }
     }
 
-    const blob = await convertDocxToQTI(selectedFile, msAnswers);
-    // Use the input filename (sans .docx) as the download name
     const baseName = selectedFile.name.replace(/\.docx$/i, '');
-    triggerDownload(blob, baseName + '.zip');
+    const { allQuestions, resolvedImages } = await parseDocxToQuestions(selectedFile, msAnswers);
+    renderEditor(allQuestions, resolvedImages, baseName);
     const withMs = selectedMsFile ? ' (with mark scheme answers)' : '';
-    showMsg('', `✅ Download started automatically${withMs}`);
+    showMsg('', `✅ Parsed ${allQuestions.length} questions — review &amp; edit below, then export`);
   } catch (err) {
     showMsg('error', '✗ ' + err.message);
   } finally {
@@ -660,10 +811,11 @@ function essayItemXml(q, answerText) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Main converter
-// msAnswers: optional dict from parseMarkScheme(), keyed by question number string
+// Main converter — split into two phases:
+//   parseDocxToQuestions → {allQuestions, resolvedImages}
+//   buildQtiZipBlob      → Blob (the ZIP file)
 // ─────────────────────────────────────────────────────────────────────────────
-async function convertDocxToQTI(file, msAnswers) {
+async function parseDocxToQuestions(file, msAnswers) {
   msAnswers = msAnswers || {};
 
   const buf     = await file.arrayBuffer();
@@ -902,44 +1054,37 @@ async function convertDocxToQTI(file, msAnswers) {
   if (totalQ === 0)
     throw new Error('No questions found. Make sure each question starts with a number (e.g. "1 What is…").');
 
-  // ── Build output ZIP ─────────────────────────────────────────────────
-  const outZip    = new JSZip();
-  const itemsDir  = outZip.folder('items');
-  const assetsDir = outZip.folder('assets');
-
-  // Add extracted images
-  for (const { filename, data } of Object.values(resolvedImages)) {
-    assetsDir.file(filename, data);
-  }
-
-  const itemRefs   = [];
-  const itemImages = {};
-
-  // ── Merge, deduplicate, and sort all questions before generating XML ──
-  // Problem: iterating mcq first then structured produces item_refs in
-  // two separate batches → SLS imports in wrong order (Q5 as #22, etc.).
-  // Additionally, some papers parse the cover page as a false Q1, giving
-  // a duplicate Q001 entry.
-  //
-  // Fix: build a Map keyed by qnum — MCQ entries win over structured
-  // (real MCQ questions have options; cover-page false positives don't).
-  // Then sort numerically so assessment_test.xml lists Q001, Q002 … in order.
-  const qByNum = new Map();   // qnum → { isMcq, q }
+  // ── Merge, deduplicate, sort — MCQ wins over structured for same qnum ──
+  const qByNum = new Map();
   for (const q of mcq)        qByNum.set(q.qnum, { isMcq: true,  q });
   for (const q of structured) if (!qByNum.has(q.qnum)) qByNum.set(q.qnum, { isMcq: false, q });
 
   const allQuestions = [...qByNum.values()]
-    .sort((a, b) => parseInt(a.q.qnum) - parseInt(b.q.qnum));
+    .sort((a, b) => parseInt(a.q.qnum) - parseInt(b.q.qnum))
+    .map(({ isMcq, q }) => ({ isMcq, q, answer: resolveAnswer(q.qnum) }));
 
-  for (const { isMcq, q } of allQuestions) {
-    const ans = resolveAnswer(q.qnum);
-    const { id, xml } = isMcq ? mcqItemXml(q, ans) : essayItemXml(q, ans);
+  return { allQuestions, resolvedImages };
+}
+
+// ── Phase 2: build the QTI ZIP from (possibly edited) question data ──────────
+async function buildQtiZipBlob(allQuestions, resolvedImages) {
+  const outZip    = new JSZip();
+  const itemsDir  = outZip.folder('items');
+  const assetsDir = outZip.folder('assets');
+
+  for (const { filename, data } of Object.values(resolvedImages))
+    assetsDir.file(filename, data);
+
+  const itemRefs   = [];
+  const itemImages = {};
+
+  for (const { isMcq, q, answer } of allQuestions) {
+    const { id, xml } = isMcq ? mcqItemXml(q, answer) : essayItemXml(q, answer);
     itemsDir.file(`${id}.xml`, xml);
     itemRefs.push(id);
-    itemImages[id] = q.tokens.filter(t=>t.type==='image').map(t=>t.value);
+    itemImages[id] = q.tokens.filter(t => t.type === 'image').map(t => t.value);
   }
 
-  // assessment_test.xml
   let testXml = `<assessmentTest xmlns="${QTI_NS}" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
   identifier="TEST1" title="Converted Test"
   xsi:schemaLocation="${QTI_XSD}">
@@ -951,7 +1096,6 @@ async function convertDocxToQTI(file, msAnswers) {
   testXml += `</assessmentSection>\n</testPart>\n</assessmentTest>`;
   outZip.file('assessment_test.xml', testXml);
 
-  // imsmanifest.xml
   let manifest = `<manifest xmlns="http://www.imsglobal.org/xsd/imscp_v1p1"
   xmlns:imsmd="http://www.imsglobal.org/xsd/imsmd_v1p2"
   xmlns:imsqti="http://www.imsglobal.org/xsd/imsqti_metadata_v2p1"
@@ -968,15 +1112,237 @@ async function convertDocxToQTI(file, msAnswers) {
   for (const id of itemRefs) {
     manifest += `<resource identifier="RES_${id}" type="imsqti_item_xmlv2p1" href="items/${id}.xml">
   <metadata/><file href="items/${id}.xml"/>\n`;
-    for (const img of (itemImages[id]||[]))
+    for (const img of (itemImages[id] || []))
       manifest += `  <file href="assets/${img}"/>\n`;
     manifest += `</resource>\n`;
   }
   manifest += `</resources>\n</manifest>`;
   outZip.file('imsmanifest.xml', manifest);
 
-  return outZip.generateAsync({ type:'blob', compression:'DEFLATE' });
+  return outZip.generateAsync({ type: 'blob', compression: 'DEFLATE' });
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Review & Edit editor
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Global editor state ─────────────────────────────────────────────────────────
+let editorState = null;   // { allQuestions, resolvedImages, imageUrls, baseName }
+
+// Render the full editor after a successful parse ─────────────────────────────
+function renderEditor(allQuestions, resolvedImages, baseName) {
+  // Create in-memory blob URLs so we can display images without a server
+  const imageUrls = {};
+  for (const { filename, data } of Object.values(resolvedImages)) {
+    const mime = filename.endsWith('.png') ? 'image/png'
+               : filename.endsWith('.gif') ? 'image/gif'
+               : 'image/jpeg';
+    imageUrls[filename] = URL.createObjectURL(new Blob([data], { type: mime }));
+  }
+
+  editorState = { allQuestions, resolvedImages, imageUrls, baseName };
+
+  // Populate cards
+  const container = document.getElementById('questionCards');
+  container.innerHTML = '';
+  allQuestions.forEach((entry, idx) => container.appendChild(buildCard(entry, imageUrls, idx)));
+
+  // Update count badge
+  document.getElementById('editorQCount').textContent =
+    `${allQuestions.length} question${allQuestions.length !== 1 ? 's' : ''}`;
+
+  // Show section and smoothly scroll to it
+  const sec = document.getElementById('editorSection');
+  sec.style.display = 'block';
+  setTimeout(() => sec.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80);
+}
+
+// Build one question card ──────────────────────────────────────────────────────
+function buildCard(entry, imageUrls, idx) {
+  const { isMcq, q, answer } = entry;
+
+  const card = document.createElement('div');
+  card.className = 'q-card';
+  card.dataset.idx = idx;
+
+  // ── Header ──────────────────────────────────────────────────────────
+  const hdr = document.createElement('div');
+  hdr.className = 'q-card-header';
+  hdr.innerHTML = `
+    <span class="q-num-badge">Q${q.qnum}</span>
+    <span class="q-type-badge ${isMcq ? 'mcq' : 'essay'}">${isMcq ? 'MCQ' : 'Essay'}</span>`;
+  card.appendChild(hdr);
+
+  // ── Stem ────────────────────────────────────────────────────────────
+  const stemWrap = document.createElement('div');
+  stemWrap.className = 'q-stem';
+
+  q.tokens.forEach((token, ti) => {
+    if (token.type === 'text') {
+      const d = document.createElement('div');
+      d.className = 'stem-text';
+      d.contentEditable = 'true';
+      d.setAttribute('data-ph', 'Question stem…');
+      d.setAttribute('data-token-idx', ti);
+      // Set as HTML so formatting tags (strong/sup/sub) render correctly
+      d.innerHTML = safeHtml(token.value);
+      stemWrap.appendChild(d);
+
+    } else if (token.type === 'image') {
+      const img = document.createElement('img');
+      img.className = 'stem-img';
+      img.alt = 'diagram';
+      img.setAttribute('data-token-idx', ti);
+      img.src = imageUrls[token.value] || '';
+      stemWrap.appendChild(img);
+
+    } else if (token.type === 'table') {
+      const tbl = document.createElement('table');
+      tbl.className = 'stem-table';
+      tbl.setAttribute('data-token-idx', ti);
+      for (const row of token.value) {
+        const tr = document.createElement('tr');
+        for (const cell of row) {
+          const td = document.createElement('td');
+          td.innerHTML = safeHtml(cell);
+          tr.appendChild(td);
+        }
+        tbl.appendChild(tr);
+      }
+      stemWrap.appendChild(tbl);
+    }
+  });
+  card.appendChild(stemWrap);
+
+  // ── Options (MCQ only) ───────────────────────────────────────────────
+  if (isMcq && q.options && q.options.length) {
+    const optsLabel = document.createElement('div');
+    optsLabel.className = 'q-opts-label';
+    optsLabel.textContent = 'Options';
+    card.appendChild(optsLabel);
+
+    const optsWrap = document.createElement('div');
+    optsWrap.className = 'q-options';
+
+    q.options.forEach((opt, oi) => {
+      const row = document.createElement('div');
+      row.className = 'option-row';
+
+      const lbl = document.createElement('span');
+      lbl.className = 'opt-letter';
+      lbl.textContent = LETTERS[oi].toUpperCase();
+      lbl.setAttribute('data-opt-idx', oi);
+
+      const inp = document.createElement('input');
+      inp.type = 'text';
+      inp.className = 'opt-input';
+      inp.value = stripTags(opt);   // plain text for the input field
+      inp.setAttribute('data-opt-idx', oi);
+
+      row.appendChild(lbl);
+      row.appendChild(inp);
+      optsWrap.appendChild(row);
+    });
+    card.appendChild(optsWrap);
+
+    // ── Correct answer selector ────────────────────────────────────────
+    const ansRow = document.createElement('div');
+    ansRow.className = 'q-answer-row';
+    ansRow.innerHTML = `<span>✓ Correct answer:</span>`;
+
+    const sel = document.createElement('select');
+    sel.className = 'answer-select';
+    sel.innerHTML = `<option value="">— none —</option>` +
+      LETTERS.slice(0, q.options.length).map((l, i) =>
+        `<option value="${l}" ${answer === l ? 'selected' : ''}>${l.toUpperCase()}</option>`
+      ).join('');
+
+    // Highlight correct-option letter badge immediately and on change
+    const syncLabels = () => {
+      optsWrap.querySelectorAll('.opt-letter').forEach(lbl => {
+        lbl.classList.toggle('is-correct', lbl.textContent.toLowerCase() === sel.value);
+      });
+    };
+    sel.addEventListener('change', syncLabels);
+    syncLabels();
+
+    ansRow.appendChild(sel);
+    card.appendChild(ansRow);
+  }
+
+  return card;
+}
+
+// Read back edited state from DOM into a new allQuestions array ───────────────
+function readEditorState() {
+  const cards = document.querySelectorAll('#questionCards .q-card');
+  return editorState.allQuestions.map((entry, idx) => {
+    const card = cards[idx];
+    if (!card) return entry;
+
+    const { isMcq, q } = entry;
+
+    // Re-build tokens: update text tokens from contenteditable divs; keep others
+    const newTokens = q.tokens.map((token, ti) => {
+      if (token.type !== 'text') return token;
+      const el = card.querySelector(`.stem-text[data-token-idx="${ti}"]`);
+      return el ? { type: 'text', value: el.innerHTML } : token;
+    });
+
+    const newQ = { ...q, tokens: newTokens };
+
+    // MCQ: read option inputs + answer select
+    let newAnswer = entry.answer;
+    if (isMcq) {
+      newQ.options = q.options.map((opt, oi) => {
+        const el = card.querySelector(`.opt-input[data-opt-idx="${oi}"]`);
+        return el ? el.value : opt;
+      });
+      const sel = card.querySelector('.answer-select');
+      if (sel) newAnswer = sel.value;
+    }
+
+    return { isMcq, q: newQ, answer: newAnswer };
+  });
+}
+
+// Export button ───────────────────────────────────────────────────────────────
+document.getElementById('exportBtn').addEventListener('click', async () => {
+  if (!editorState) return;
+  const btn = document.getElementById('exportBtn');
+  btn.disabled = true;
+  btn.textContent = '⏳ Building ZIP…';
+  try {
+    const edited = readEditorState();
+    const blob   = await buildQtiZipBlob(edited, editorState.resolvedImages);
+    triggerDownload(blob, editorState.baseName + '.zip');
+    btn.textContent = '✅ Downloaded!';
+    setTimeout(() => { btn.textContent = '📦 Export QTI ZIP'; btn.disabled = false; }, 2500);
+  } catch (e) {
+    btn.textContent = '📦 Export QTI ZIP';
+    btn.disabled = false;
+    showMsg('error', '✗ Export failed: ' + e.message);
+  }
+});
+
+// Reset button — hide editor and let user upload a new file ──────────────────
+document.getElementById('resetBtn').addEventListener('click', () => {
+  // Revoke blob URLs to free memory
+  if (editorState) {
+    for (const url of Object.values(editorState.imageUrls)) URL.revokeObjectURL(url);
+    editorState = null;
+  }
+  document.getElementById('editorSection').style.display = 'none';
+  document.getElementById('questionCards').innerHTML = '';
+  document.getElementById('message').innerHTML = '';
+  // Reset upload zones
+  selectedFile = null; selectedMsFile = null;
+  fileNameEl.textContent = ''; msFileNameEl.textContent = '';
+  dropZone.classList.remove('has-file');
+  msDropZone.classList.remove('has-file');
+  convertBtn.disabled = true;
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+});
 </script>
 </body>
 </html>
