@@ -320,6 +320,13 @@ function safeHtml(s) {
   return s.replace(/&(?![a-zA-Z#]\w{0,6};)/g, '&amp;');
 }
 function stripTags(s) { return s.replace(/<[^>]+>/g,''); }
+function mergeAdjacentTags(text) {
+  // Merge adjacent identical inline tags: <sup>a</sup><sup>b</sup> → <sup>ab</sup>
+  for (const tag of ['sup','sub','strong','em']) {
+    text = text.replace(new RegExp(`</${tag}><${tag}>`, 'g'), '');
+  }
+  return text;
+}
 function randomId(n=3) {
   const c='ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
   return Array.from({length:n},()=>c[Math.random()*c.length|0]).join('');
@@ -465,7 +472,7 @@ function* iterBlockItems(body) {
         parts.push(text);
       }
 
-      const paraText = parts.join('').trim();
+      const paraText = mergeAdjacentTags(parts.join('').trim());
       if (paraText) yield { type: 'text', value: paraText };
 
       // Images embedded in this paragraph
@@ -504,7 +511,7 @@ function* iterBlockItems(body) {
             }
             parts.push(text);
           }
-          cells.push(parts.join('').trim());
+          cells.push(mergeAdjacentTags(parts.join('').trim()));
           // Collect images inside this cell
           for (const blip of tc.getElementsByTagNameNS(A,'blip')) {
             const rId = getREmbed(blip);
@@ -534,7 +541,7 @@ function tokensToHtml(tokens) {
     if (type === 'table') {
       let t = "<table border='1'>\n";
       for (const row of value) {
-        t += '<tr>' + row.map(c => `<td>${escXml(c)}</td>`).join('') + '</tr>\n';
+        t += '<tr>' + row.map(c => `<td>${safeHtml(c)}</td>`).join('') + '</tr>\n';
       }
       return t + '</table>\n';
     }
@@ -560,7 +567,7 @@ const LETTERS = ['a','b','c','d','e','f'];
 
 function mcqItemXml(q, answerText) {
   const id  = `Q${pad3(q.qnum)}_${randomId()}`;
-  const ttl = escXml((q.tokens.find(t=>t.type==='text')?.value||'').slice(0,70));
+  const ttl = escXml(stripTags(q.tokens.find(t=>t.type==='text')?.value||'').slice(0,70));
   let xml = `<assessmentItem xmlns="${QTI_NS}" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
   adaptive="false" identifier="${id}" timeDependent="false"
   title="Q${pad3(q.qnum)} ${ttl}"
@@ -573,7 +580,7 @@ function mcqItemXml(q, answerText) {
   <choiceInteraction responseIdentifier="RESPONSE" shuffle="true" maxChoices="1">
     <prompt><div>\n${tokensToHtml(q.tokens)}</div></prompt>\n`;
   q.options.slice(0,6).forEach((opt,i) => {
-    xml += `    <simpleChoice identifier="${LETTERS[i]}">${escXml(opt)}</simpleChoice>\n`;
+    xml += `    <simpleChoice identifier="${LETTERS[i]}">${safeHtml(opt)}</simpleChoice>\n`;
   });
   xml += `  </choiceInteraction>
 </itemBody>
@@ -674,13 +681,23 @@ async function convertDocxToQTI(file, msAnswers) {
   }
 
   // Extract MCQ option texts from a row like ['', 'A  text', 'B  text', ...]
+  // Also handles bold option letters e.g. ['', '<strong>A</strong>  text', ...]
   function extractOptsFromRow(row) {
     const opts = [];
     for (const cell of row.slice(1)) {
       const t = cell.trim();
       if (!t) continue;
-      const m = OPT_CELL_RE.exec(t);
-      if (m) opts.push(m[2].trim());
+      // Strip HTML to check for option-letter prefix
+      const tPlain = t.replace(/<[^>]+>/g, '');
+      const m = OPT_CELL_RE.exec(tPlain);
+      if (m) {
+        // Remove leading option letter (possibly HTML-wrapped) from original cell
+        let optRaw = t.replace(/^(?:<[^>]+>)*[A-D](?:<\/[^>]+>)*\s*/i, '');
+        // Strip dangling closing tags at start (e.g. '</strong>' when letter
+        // shares an opening tag with the content: '<strong>A </strong>text')
+        optRaw = optRaw.replace(/^(\s*<\/[^>]+>)+/, '').trim();
+        opts.push(optRaw || m[2].trim());
+      }
     }
     return opts;
   }

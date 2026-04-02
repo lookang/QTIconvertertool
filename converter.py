@@ -151,9 +151,16 @@ def convert_docx_to_qti(input_docx, job_dir, ms_answers=None):
         if is_italic: text = f"<em>{text}</em>"
         return text
 
+    def merge_adjacent_tags(text):
+        """Merge adjacent identical inline tags: <sup>a</sup><sup>b</sup> → <sup>ab</sup>."""
+        for tag in ('sup', 'sub', 'strong', 'em'):
+            text = re.sub(f'</{tag}><{tag}>', '', text)
+        return text
+
     def extract_cell_text(cell):
         """Extract formatted text (sup/sub/bold/italic) from a table cell element."""
-        return "".join(extract_run_text(r) for r in cell.xpath(".//w:r")).strip()
+        raw = "".join(extract_run_text(r) for r in cell.xpath(".//w:r")).strip()
+        return merge_adjacent_tags(raw)
 
     def iter_block_items(doc):
         body = doc.element.body
@@ -165,6 +172,7 @@ def convert_docx_to_qti(input_docx, job_dir, ms_answers=None):
                 paragraph_text = "".join(
                     extract_run_text(r) for r in child.xpath("./w:r")
                 ).strip()
+                paragraph_text = merge_adjacent_tags(paragraph_text)
 
                 if paragraph_text:
                     yield ("text", paragraph_text)
@@ -226,15 +234,24 @@ def convert_docx_to_qti(input_docx, job_dir, ms_answers=None):
     OPT_LABEL_RE = re.compile(r'^[A-D]$', re.I)
 
     def extract_opts_from_row(row):
-        """Return list of option texts from a table options row (format: ['', 'A text', ...])."""
+        """Return list of option texts from a table options row (format: ['', 'A text', ...]).
+        Also handles bold option letters, e.g. ['', '<strong>A</strong>  text', ...]."""
         opts = []
         for cell in row[1:]:          # skip first (empty) cell
             cell = cell.strip()
             if not cell:
                 continue
-            m = OPT_CELL_RE.match(cell)
+            # Strip HTML tags to check for option-letter prefix (handles bold letters)
+            cell_plain = re.sub(r'<[^>]+>', '', cell)
+            m = OPT_CELL_RE.match(cell_plain)
             if m:
-                opts.append(m.group(2).strip())
+                # Remove the leading letter (possibly HTML-wrapped) from original cell
+                opt_raw = re.sub(r'^(?:<[^>]+>)*[A-D](?:</[^>]+>)*\s*', '', cell,
+                                 flags=re.IGNORECASE)
+                # Strip dangling closing tags at start (e.g. '</strong>' when letter
+                # shares an opening tag with the content: '<strong>A </strong>text')
+                opt_raw = re.sub(r'^(\s*</[^>]+>)+', '', opt_raw).strip()
+                opts.append(opt_raw or m.group(2).strip())
             # lone 'A'/'B' etc (image-only options) → skip (image captured separately)
         return opts
 
@@ -531,6 +548,7 @@ def convert_docx_to_qti(input_docx, job_dir, ms_answers=None):
                     html += "<tr>"
                     for cell in row:
                         safe  = saxutils.escape(cell)
+                        safe  = safe.replace("&lt;", "<").replace("&gt;", ">")
                         html += f"<td>{safe}</td>"
                     html += "</tr>\n"
                 html += "</table>\n"
@@ -571,10 +589,12 @@ def convert_docx_to_qti(input_docx, job_dir, ms_answers=None):
         title_text = ""
         for ttype, val in q["tokens"]:
             if ttype == "text":
-                title_text = val[:70]
+                title_text = val
                 break
 
-        safe_title = saxutils.escape(title_text)
+        # Strip HTML tags for the XML title attribute (plain text only)
+        title_plain = re.sub(r'<[^>]+>', '', title_text)[:70]
+        safe_title = saxutils.escape(title_plain)
 
         xml = f'''<assessmentItem xmlns="http://www.imsglobal.org/xsd/imsqti_v2p1"
 xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
@@ -602,6 +622,7 @@ xsi:schemaLocation="http://www.imsglobal.org/xsd/imsqti_v2p1 http://www.imsgloba
             if i >= len(letters):
                 break
             safe = saxutils.escape(opt)
+            safe = safe.replace("&lt;", "<").replace("&gt;", ">")
             xml += f'<simpleChoice identifier="{letters[i]}">{safe}</simpleChoice>\n'
 
         xml += '''
