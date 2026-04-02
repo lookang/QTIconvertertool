@@ -645,8 +645,10 @@ async function convertDocxToQTI(file, msAnswers) {
   const MAX_QNUM    = 200;   // ignore numbers > this (e.g. the year "2022")
 
   // Parse question number from table first-cell (normalises 'XX23' → '23')
+  // Also strips HTML tags e.g. '<strong>1</strong>' → '1'
   function parseQnum(cell) {
-    const m = QNUM_ONLY.exec((cell || '').trim());
+    const clean = (cell || '').replace(/<[^>]+>/g, '').trim();
+    const m = QNUM_ONLY.exec(clean);
     if (m && parseInt(m[1]) <= MAX_QNUM) return m[1];
     return null;
   }
@@ -749,7 +751,8 @@ async function convertDocxToQTI(file, msAnswers) {
         if (qText) curQ.tokens.push({ type:'text', value: qText });
 
         for (const row of rows.slice(1)) {
-          const r0 = (row[0] || '').trim();
+          const r0      = (row[0] || '').trim();
+          const r0plain = r0.replace(/<[^>]+>/g, '').trim(); // strip HTML for detection
           const subQnum = parseQnum(r0);
 
           if (subQnum !== null) {
@@ -760,7 +763,7 @@ async function convertDocxToQTI(file, msAnswers) {
             const qText2 = dedupCells(row.slice(1));
             if (qText2) curQ.tokens.push({ type:'text', value: qText2 });
 
-          } else if (/^[A-D]$/i.test(r0)) {
+          } else if (/^[A-D]$/i.test(r0plain)) {
             // FIX: MCQ option row where the letter IS the first cell
             // e.g. ['A', '10–6', '10–9', '10–12']  (Q1 format)
             const optText = dedupCells(row.slice(1));

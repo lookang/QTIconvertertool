@@ -251,8 +251,10 @@ def convert_docx_to_qti(input_docx, job_dir, ms_answers=None):
 
     def parse_qnum(first_cell):
         """Return int qnum from first_cell if it looks like a question-start,
-        else return None.  Handles bare '25' and prefixed 'XX23' alike."""
-        m = qnum_only_regex.match(first_cell)
+        else return None.  Handles bare '25', prefixed 'XX23', and bold
+        '<strong>1</strong>' cells (strip HTML tags before matching)."""
+        clean = re.sub(r'<[^>]+>', '', first_cell).strip()
+        m = qnum_only_regex.match(clean)
         if m:
             n = int(m.group(1))
             if n <= MAX_QNUM:
@@ -360,7 +362,8 @@ def convert_docx_to_qti(input_docx, job_dir, ms_answers=None):
                 for row in rows[1:]:
                     if not row:
                         continue
-                    row0 = row[0].strip()
+                    row0     = row[0].strip()
+                    row0_plain = re.sub(r'<[^>]+>', '', row0).strip()  # strip HTML for detection
                     sub_qnum = parse_qnum(row0)
 
                     if sub_qnum is not None:
@@ -374,7 +377,7 @@ def convert_docx_to_qti(input_docx, job_dir, ms_answers=None):
                         if q_text:
                             current_tokens.append(("text", q_text))
 
-                    elif OPT_LABEL_RE.match(row0):
+                    elif OPT_LABEL_RE.match(row0_plain):
                         # FIX: MCQ option row where the letter IS the first cell
                         # e.g. ['A', '10–6', '10–9', '10–12']  (Q1 format)
                         # or   ['A', 'I1',   'I4R3']            (Q24 format)
@@ -488,6 +491,7 @@ def convert_docx_to_qti(input_docx, job_dir, ms_answers=None):
     import random
     import string
     import xml.sax.saxutils as saxutils
+
 
     os.makedirs(items_dir, exist_ok=True)
 
