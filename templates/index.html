@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>DOCX → QTI Converter</title>
+
+    <style>
+        body {
+            font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial;
+            background: #f5f7fb;
+            margin: 0;
+            padding: 40px 0;
+            display: flex;
+            justify-content: center;
+        }
+
+        .container {
+            width: 760px;
+            background: white;
+            padding: 30px 40px;
+            border-radius: 14px;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.08);
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 5px;
+        }
+
+        .subtitle {
+            text-align: center;
+            color: #666;
+            margin-bottom: 25px;
+        }
+
+        /* ── Drop zones ─────────────────────────────────────────────── */
+        .drop-zone {
+            border: 2px dashed #3b82f6;
+            border-radius: 12px;
+            padding: 45px;
+            text-align: center;
+            color: #3b82f6;
+            font-size: 18px;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+
+        .drop-zone.dragover  { background: #eef2ff; }
+        .drop-zone.has-file  { border-style: solid; color: #111; }
+        .filename { margin-top: 10px; font-size: 15px; color: #111; }
+
+        /* ── Optional MS zone ────────────────────────────────────────── */
+        .ms-zone {
+            border: 2px dashed #d1d5db;
+            border-radius: 12px;
+            padding: 18px 45px;
+            text-align: center;
+            color: #9ca3af;
+            font-size: 15px;
+            cursor: pointer;
+            transition: 0.2s;
+            margin-top: 14px;
+        }
+
+        .ms-zone:hover        { border-color: #6b7280; color: #374151; }
+        .ms-zone.dragover     { background: #f3f4f6; border-color: #6b7280; }
+        .ms-zone.has-file     { border-style: solid; color: #111; border-color: #22c55e; }
+
+        .ms-badge {
+            display: inline-block;
+            font-size: 11px;
+            font-weight: 600;
+            padding: 2px 6px;
+            border-radius: 4px;
+            background: #dcfce7;
+            color: #16a34a;
+            margin-left: 6px;
+            vertical-align: middle;
+        }
+
+        /* ── Buttons ─────────────────────────────────────────────────── */
+        button {
+            margin-top: 20px;
+            width: 100%;
+            padding: 12px;
+            border: none;
+            border-radius: 8px;
+            background: #2563eb;
+            color: white;
+            font-size: 17px;
+            cursor: pointer;
+        }
+
+        button:hover    { background: #1e4ed8; }
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        #spinner { display: none; text-align: center; margin-top: 15px; }
+        #message { margin-top: 20px; text-align: center; }
+        .error   { color: #dc2626; }
+
+        /* ── Instructions ────────────────────────────────────────────── */
+        .instructions {
+            margin-top: 40px;
+            border-top: 1px solid #e5e7eb;
+            padding-top: 30px;
+        }
+
+        .sample-container { margin-top: 15px; text-align: center; }
+        .sample-container img {
+            width: 100%;
+            max-height: 500px;
+            object-fit: contain;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            cursor: zoom-in;
+        }
+
+        /* ── Zoom modal ──────────────────────────────────────────────── */
+        .modal {
+            display: none; position: fixed; z-index: 1000;
+            left: 0; top: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.8);
+            justify-content: center; align-items: center;
+        }
+        .modal img { max-width: 90%; max-height: 90%; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>DOCX → QTI Converter</h1>
+    <div class="subtitle">Upload a formatted Word document and get a ready‑to‑import QTI package</div>
+
+    <form id="uploadForm">
+
+        <!-- Question paper (required) -->
+        <div id="dropZone" class="drop-zone">
+            Drag &amp; drop your question paper (.docx) here<br>
+            or click to select
+            <div id="fileName" class="filename"></div>
+        </div>
+        <input type="file" id="fileInput" accept=".docx" hidden>
+
+        <!-- Mark scheme (optional) -->
+        <div id="msDropZone" class="ms-zone">
+            ➕ Add mark scheme (.docx) — optional
+            <span class="ms-badge">injects correct answers</span>
+            <div id="msFileName" class="filename"></div>
+        </div>
+        <input type="file" id="msFileInput" accept=".docx" hidden>
+
+        <button type="submit">Convert Document</button>
+    </form>
+
+    <div id="spinner">⏳ Converting… please wait</div>
+    <div id="message"></div>
+
+    <div class="instructions">
+        <h2>How to format your document</h2>
+        <ul>
+            <li>Start each question with a number (e.g. <b>1 What is...</b>)</li>
+            <li>Images with text overlay should be "cleaned up" by replacing the affected images with screenshots.</li>
+            <li>MCQ options should be labelled with <b>A. B. C. D.</b> or <b>A) B) C) D)</b></li>
+            <li>Structured questions will be extracted as a whole (including parts/subparts).</li>
+            <li>Indents (e.g., a), (i), etc) should not be used; replace them with plain text instead.</li>
+            <li>If you have answers to the questions, append them at the bottom of the document and begin the answer segment with capitalised text <b>ANSWERS</b>.</li>
+            <li>Answers for parts/subparts should begin with the question number for the first part/subpart but not the subsequent parts/subparts. Refer to sample document question 4's answers — <b>"4"</b> only appears once.</li>
+            <li><b>Mark scheme</b>: upload the matching MS file to automatically populate <code>correctResponse</code> in each QTI item.</li>
+        </ul>
+
+        <div class="sample-container">
+            <img id="sampleImage"
+                 src="{{ url_for('static', filename='sample_doc.png') }}"
+                 alt="Sample document"
+                 onerror="this.parentElement.style.display='none'">
+            <div style="font-size:13px;color:#666;margin-top:6px;">
+                Click image to zoom
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Zoom modal -->
+<div id="imageModal" class="modal">
+    <img id="modalImg">
+</div>
+
+<script>
+// ── Question paper drop zone ──────────────────────────────────────────────
+const dropZone   = document.getElementById('dropZone');
+const fileInput  = document.getElementById('fileInput');
+const fileName   = document.getElementById('fileName');
+
+dropZone.addEventListener('click', () => fileInput.click());
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragover'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+dropZone.addEventListener('drop', e => {
+    e.preventDefault();
+    dropZone.classList.remove('dragover');
+    fileInput.files = e.dataTransfer.files;
+    updateFileName();
+});
+fileInput.addEventListener('change', updateFileName);
+
+function updateFileName() {
+    if (fileInput.files.length > 0) {
+        fileName.textContent = 'Selected: ' + fileInput.files[0].name;
+        dropZone.classList.add('has-file');
+    }
+}
+
+// ── Mark scheme drop zone ─────────────────────────────────────────────────
+const msDropZone   = document.getElementById('msDropZone');
+const msFileInput  = document.getElementById('msFileInput');
+const msFileNameEl = document.getElementById('msFileName');
+
+msDropZone.addEventListener('click', () => msFileInput.click());
+msDropZone.addEventListener('dragover', e => { e.preventDefault(); msDropZone.classList.add('dragover'); });
+msDropZone.addEventListener('dragleave', () => msDropZone.classList.remove('dragover'));
+msDropZone.addEventListener('drop', e => {
+    e.preventDefault();
+    msDropZone.classList.remove('dragover');
+    msFileInput.files = e.dataTransfer.files;
+    updateMsFileName();
+});
+msFileInput.addEventListener('change', updateMsFileName);
+
+function updateMsFileName() {
+    if (msFileInput.files.length > 0) {
+        msFileNameEl.textContent = 'Selected: ' + msFileInput.files[0].name;
+        msDropZone.classList.add('has-file');
+    }
+}
+
+// ── Form submission ───────────────────────────────────────────────────────
+document.getElementById('uploadForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+
+    const spinner = document.getElementById('spinner');
+    const message = document.getElementById('message');
+
+    spinner.style.display = 'block';
+    message.innerHTML = '';
+
+    const formData = new FormData();
+    formData.append('file', fileInput.files[0]);
+
+    // Attach mark scheme if provided
+    if (msFileInput.files.length > 0) {
+        formData.append('ms_file', msFileInput.files[0]);
+    }
+
+    try {
+        const response = await fetch('/convert', {
+            method: 'POST',
+            body: formData
+        });
+
+        spinner.style.display = 'none';
+
+        if (!response.ok) {
+            const data = await response.json();
+            message.innerHTML = `<div class="error">${data.error}</div>`;
+            return;
+        }
+
+        const blob = await response.blob();
+        const url  = window.URL.createObjectURL(blob);
+
+        const a = document.createElement('a');
+        a.href     = url;
+        a.download = 'converted_qti.zip';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+
+        const withMs = msFileInput.files.length > 0 ? ' (with mark scheme answers)' : '';
+        message.innerHTML = `✅ Download started automatically${withMs}`;
+
+    } catch {
+        spinner.style.display = 'none';
+        message.innerHTML = `<div class="error">Server error. Please try again.</div>`;
+    }
+});
+
+// ── Zoom modal ────────────────────────────────────────────────────────────
+const modal      = document.getElementById('imageModal');
+const modalImg   = document.getElementById('modalImg');
+const sampleImage = document.getElementById('sampleImage');
+
+if (sampleImage) {
+    sampleImage.onclick = () => {
+        modal.style.display = 'flex';
+        modalImg.src = sampleImage.src;
+    };
+}
+modal.onclick = () => { modal.style.display = 'none'; };
+</script>
+
+</body>
+</html>

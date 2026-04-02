@@ -1,0 +1,871 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DOCX → QTI Converter</title>
+  <!-- JSZip: reads .docx (which is a ZIP) and writes the output ZIP — no server needed -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+
+  <style>
+    body {
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial;
+      background: #f5f7fb;
+      margin: 0;
+      padding: 40px 0;
+      display: flex;
+      justify-content: center;
+    }
+    .container {
+      width: 760px;
+      background: white;
+      padding: 30px 40px;
+      border-radius: 14px;
+      box-shadow: 0 8px 30px rgba(0,0,0,0.08);
+    }
+    h1  { text-align: center; margin-bottom: 5px; }
+    .subtitle { text-align: center; color: #666; margin-bottom: 25px; }
+
+    /* ── Drop zones ─────────────────────────────────────────────────── */
+    .drop-zone {
+      border: 2px dashed #3b82f6;
+      border-radius: 12px;
+      padding: 45px;
+      text-align: center;
+      color: #3b82f6;
+      font-size: 18px;
+      cursor: pointer;
+      transition: 0.2s;
+    }
+    .drop-zone.dragover  { background: #eef2ff; }
+    .drop-zone.has-file  { border-style: solid; color: #111; }
+    .filename { margin-top: 10px; font-size: 15px; color: #111; }
+
+    /* ── Optional MS zone ───────────────────────────────────────────── */
+    .ms-zone {
+      border: 2px dashed #d1d5db;
+      border-radius: 12px;
+      padding: 18px 45px;
+      text-align: center;
+      color: #9ca3af;
+      font-size: 15px;
+      cursor: pointer;
+      transition: 0.2s;
+      margin-top: 14px;
+    }
+    .ms-zone:hover     { border-color: #6b7280; color: #374151; }
+    .ms-zone.dragover  { background: #f3f4f6; border-color: #6b7280; }
+    .ms-zone.has-file  { border-style: solid; color: #111; border-color: #22c55e; }
+
+    .ms-badge {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 600;
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: #dcfce7;
+      color: #16a34a;
+      margin-left: 6px;
+      vertical-align: middle;
+    }
+
+    /* ── Button ─────────────────────────────────────────────────────── */
+    button {
+      margin-top: 20px;
+      width: 100%;
+      padding: 12px;
+      border: none;
+      border-radius: 8px;
+      background: #2563eb;
+      color: white;
+      font-size: 17px;
+      cursor: pointer;
+    }
+    button:hover    { background: #1e4ed8; }
+    button:disabled { opacity: .5; cursor: not-allowed; }
+
+    #spinner { display: none; text-align: center; margin-top: 15px; }
+    #message  { margin-top: 20px; text-align: center; }
+    .error   { color: #dc2626; }
+
+    /* ── Instructions ───────────────────────────────────────────────── */
+    .instructions { margin-top: 40px; border-top: 1px solid #e5e7eb; padding-top: 30px; }
+    .sample-container { margin-top: 15px; text-align: center; }
+    .sample-container img {
+      width: 100%; max-height: 500px; object-fit: contain;
+      border: 1px solid #ddd; border-radius: 6px; cursor: zoom-in;
+    }
+
+    /* ── Zoom modal ─────────────────────────────────────────────────── */
+    .modal {
+      display: none; position: fixed; z-index: 1000;
+      left: 0; top: 0; width: 100%; height: 100%;
+      background: rgba(0,0,0,0.8);
+      justify-content: center; align-items: center;
+    }
+    .modal img { max-width: 90%; max-height: 90%; }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <h1>DOCX → QTI Converter</h1>
+  <div class="subtitle">Upload a formatted Word document and get a ready‑to‑import QTI 2.1 package<br>
+    <small style="color:#888">Runs entirely in your browser — no server, no uploads</small>
+  </div>
+
+  <!-- Question paper (required) -->
+  <div id="dropZone" class="drop-zone">
+    Drag &amp; drop your question paper (.docx) here<br>or click to select
+    <div id="fileName" class="filename"></div>
+  </div>
+  <input type="file" id="fileInput" accept=".docx" hidden>
+
+  <!-- Mark scheme (optional) -->
+  <div id="msDropZone" class="ms-zone">
+    ➕ Add mark scheme (.docx) — optional
+    <span class="ms-badge">injects correct answers</span>
+    <div id="msFileName" class="filename"></div>
+  </div>
+  <input type="file" id="msFileInput" accept=".docx" hidden>
+
+  <button id="convertBtn" disabled>Convert Document</button>
+  <div id="spinner">⏳ Converting… please wait</div>
+  <div id="message"></div>
+
+  <div class="instructions">
+    <h2>How to format your document</h2>
+    <ul>
+      <li>Start each question with a number (e.g. <b>1 What is...</b>)</li>
+      <li>Images with text overlay should be "cleaned up" by replacing them with screenshots.</li>
+      <li>MCQ options should be labelled <b>A.</b> / <b>B.</b> / <b>C.</b> / <b>D.</b> or <b>A)</b> / <b>B)</b> / <b>C)</b> / <b>D)</b></li>
+      <li>Structured questions will be extracted as a whole (including parts/subparts).</li>
+      <li>Indents (e.g., a), (i), etc) should not be used; replace them with plain text instead.</li>
+      <li>Append answers at the bottom and begin the section with the capitalised word <b>ANSWERS</b>.</li>
+      <li>Answers for parts/subparts: the question number appears only on the <em>first</em> part — see sample doc Q4.</li>
+      <li><b>Mark scheme</b>: upload the matching MS file above to automatically populate <code>correctResponse</code> in each QTI item.</li>
+    </ul>
+
+    <div class="sample-container">
+      <img id="sampleImage" src="sample_doc.png" alt="Sample document"
+           onerror="this.parentElement.style.display='none'">
+      <div style="font-size:13px;color:#666;margin-top:6px;">Click image to zoom</div>
+    </div>
+  </div>
+</div>
+
+<!-- Zoom modal -->
+<div id="imageModal" class="modal">
+  <img id="modalImg">
+</div>
+
+<script>
+// ─────────────────────────────────────────────────────────────────────────────
+// UI wiring
+// ─────────────────────────────────────────────────────────────────────────────
+const dropZone    = document.getElementById('dropZone');
+const fileInput   = document.getElementById('fileInput');
+const fileNameEl  = document.getElementById('fileName');
+const msDropZone  = document.getElementById('msDropZone');
+const msFileInput = document.getElementById('msFileInput');
+const msFileNameEl = document.getElementById('msFileName');
+const convertBtn  = document.getElementById('convertBtn');
+const spinner     = document.getElementById('spinner');
+const messageEl   = document.getElementById('message');
+
+// ── Question paper zone ───────────────────────────────────────────────────
+dropZone.addEventListener('click', () => fileInput.click());
+dropZone.addEventListener('dragover',  e => { e.preventDefault(); dropZone.classList.add('dragover'); });
+dropZone.addEventListener('dragleave', ()  => dropZone.classList.remove('dragover'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropZone.classList.remove('dragover');
+  setFile(e.dataTransfer.files[0]);
+});
+fileInput.addEventListener('change', () => setFile(fileInput.files[0]));
+
+let selectedFile = null;
+function setFile(f) {
+  if (!f || !f.name.toLowerCase().endsWith('.docx')) {
+    showMsg('error', 'Only .docx files are accepted.');
+    return;
+  }
+  selectedFile = f;
+  fileNameEl.textContent = 'Selected: ' + f.name;
+  dropZone.classList.add('has-file');
+  convertBtn.disabled = false;
+  messageEl.innerHTML = '';
+}
+
+// ── Mark scheme zone ──────────────────────────────────────────────────────
+msDropZone.addEventListener('click', () => msFileInput.click());
+msDropZone.addEventListener('dragover',  e => { e.preventDefault(); msDropZone.classList.add('dragover'); });
+msDropZone.addEventListener('dragleave', ()  => msDropZone.classList.remove('dragover'));
+msDropZone.addEventListener('drop', e => {
+  e.preventDefault();
+  msDropZone.classList.remove('dragover');
+  setMsFile(e.dataTransfer.files[0]);
+});
+msFileInput.addEventListener('change', () => setMsFile(msFileInput.files[0]));
+
+let selectedMsFile = null;
+function setMsFile(f) {
+  if (!f) return;
+  if (!f.name.toLowerCase().endsWith('.docx')) {
+    showMsg('error', 'Mark scheme must be a .docx file.');
+    return;
+  }
+  selectedMsFile = f;
+  msFileNameEl.textContent = 'Selected: ' + f.name;
+  msDropZone.classList.add('has-file');
+}
+
+// ── Convert button ────────────────────────────────────────────────────────
+convertBtn.addEventListener('click', async () => {
+  if (!selectedFile) return;
+  convertBtn.disabled = true;
+  spinner.style.display = 'block';
+  messageEl.innerHTML = '';
+  try {
+    // Parse mark scheme first (if provided)
+    let msAnswers = {};
+    if (selectedMsFile) {
+      try { msAnswers = await parseMarkScheme(selectedMsFile); }
+      catch (e) { console.warn('MS parse failed:', e); }
+    }
+
+    const blob = await convertDocxToQTI(selectedFile, msAnswers);
+    // Use the input filename (sans .docx) as the download name
+    const baseName = selectedFile.name.replace(/\.docx$/i, '');
+    triggerDownload(blob, baseName + '.zip');
+    const withMs = selectedMsFile ? ' (with mark scheme answers)' : '';
+    showMsg('', `✅ Download started automatically${withMs}`);
+  } catch (err) {
+    showMsg('error', '✗ ' + err.message);
+  } finally {
+    spinner.style.display = 'none';
+    convertBtn.disabled = false;
+  }
+});
+
+function showMsg(type, text) {
+  messageEl.innerHTML = type === 'error'
+    ? `<div class="error">${text}</div>`
+    : `<div>${text}</div>`;
+}
+function triggerDownload(blob, name) {
+  const url = URL.createObjectURL(blob);
+  const a   = document.createElement('a');
+  a.href = url; a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  URL.revokeObjectURL(url);
+}
+
+// Zoom modal
+const modal     = document.getElementById('imageModal');
+const modalImg  = document.getElementById('modalImg');
+const sampleImg = document.getElementById('sampleImage');
+if (sampleImg) sampleImg.onclick = () => { modal.style.display = 'flex'; modalImg.src = sampleImg.src; };
+modal.onclick = () => { modal.style.display = 'none'; };
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Namespaces
+// ─────────────────────────────────────────────────────────────────────────────
+const W   = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+const A   = 'http://schemas.openxmlformats.org/drawingml/2006/main';
+const REL = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Low-level helpers
+// ─────────────────────────────────────────────────────────────────────────────
+function escXml(s) {
+  return String(s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+// Escape & only — let our own <strong>/<em>/<sup>/<sub> pass through
+function safeHtml(s) {
+  return s.replace(/&(?![a-zA-Z#]\w{0,6};)/g, '&amp;');
+}
+function stripTags(s) { return s.replace(/<[^>]+>/g,''); }
+function randomId(n=3) {
+  const c='ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  return Array.from({length:n},()=>c[Math.random()*c.length|0]).join('');
+}
+function pad3(n) { return String(parseInt(n)).padStart(3,'0'); }
+
+function getWVal(el) {
+  return el.getAttributeNS(W,  'val')
+      || el.getAttribute('w:val')
+      || el.getAttribute('val')
+      || '';
+}
+function getREmbed(el) {
+  return el.getAttributeNS(REL,'embed')
+      || el.getAttribute('r:embed')
+      || '';
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Extract all tables from a parsed DOCX XML document
+// Returns Array of rows-of-cells:  [ [ [cell,cell,...], [cell,...] ], ... ]
+// ─────────────────────────────────────────────────────────────────────────────
+function extractTables(xmlDoc) {
+  const tables = [];
+  for (const tbl of xmlDoc.getElementsByTagNameNS(W,'tbl')) {
+    const rows = [];
+    for (const tr of tbl.getElementsByTagNameNS(W,'tr')) {
+      const cells = [];
+      for (const tc of tr.getElementsByTagNameNS(W,'tc')) {
+        cells.push(
+          Array.from(tc.getElementsByTagNameNS(W,'t'))
+               .map(t => t.textContent).join('').trim()
+        );
+      }
+      rows.push(cells);
+    }
+    tables.push(rows);
+  }
+  return tables;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MARK-SCHEME PARSER
+// Returns { qnum_str: answer_str }
+//   MCQ  : { '1': 'b', '2': 'c', … }   (lowercase = simpleChoice identifier)
+//   Essay: { '1': '1a: text\n1bi: text\n…', … }
+// ─────────────────────────────────────────────────────────────────────────────
+async function parseMarkScheme(msFile) {
+  const buf    = await msFile.arrayBuffer();
+  const zip    = await JSZip.loadAsync(buf);
+  const parser = new DOMParser();
+
+  const docStr = await zip.file('word/document.xml').async('string');
+  const xmlDoc = parser.parseFromString(docStr, 'application/xml');
+
+  const tables = extractTables(xmlDoc);
+  if (tables.length === 0) return {};
+
+  const first = tables[0];
+  const nRows = first.length;
+  const nCols = first[0] ? first[0].length : 0;
+
+  // ── MCQ grid: ≥6 rows × ≥10 cols, first cell is a digit ──────────────
+  if (nRows >= 6 && nCols >= 10 && /^\d+$/.test((first[0][0] || '').trim())) {
+    return parseMcqGrid(first);
+  }
+
+  // ── Structured MS ────────────────────────────────────────────────────
+  return parseStructuredMs(tables);
+}
+
+function parseMcqGrid(gridTable) {
+  // Alternating rows: [q-numbers…], [answer-letters…], [q-numbers…], …
+  const answers = {};
+  for (let i = 0; i < gridTable.length - 1; i += 2) {
+    const numsRow = gridTable[i];
+    const ansRow  = gridTable[i + 1];
+    for (let j = 0; j < numsRow.length; j++) {
+      const qn  = (numsRow[j] || '').trim();
+      const ans = (ansRow[j]  || '').trim().toUpperCase();
+      if (/^\d+$/.test(qn) && /^[ABCD]$/.test(ans)) {
+        answers[qn] = ans.toLowerCase();
+      }
+    }
+  }
+  return answers;
+}
+
+function parseStructuredMs(tables) {
+  // Rows: [part_label, answer_text, marks…]
+  // e.g. ['1a', 'rate of change…', 'B1']
+  const answers = {};
+  for (const table of tables) {
+    for (const row of table) {
+      if (row.length < 2) continue;
+      const label = (row[0] || '').trim();
+      const text  = (row[1] || '').trim();
+      if (!label || !text) continue;
+      const m = label.match(/^(\d+)/);
+      if (!m) continue;
+      const qnum  = m[1];
+      const entry = `${label}: ${text}`;
+      answers[qnum] = answers[qnum] ? answers[qnum] + '\n' + entry : entry;
+    }
+  }
+  return answers;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Iterate body children → yield {type, value}
+// type = 'text' | 'image' | 'table'
+// ─────────────────────────────────────────────────────────────────────────────
+function* iterBlockItems(body) {
+  for (const child of body.childNodes) {
+    if (child.nodeType !== 1) continue;
+    const tag = child.localName;
+
+    // ── Paragraph ──────────────────────────────────────────────────────
+    if (tag === 'p') {
+      const parts = [];
+
+      for (const run of child.getElementsByTagNameNS(W,'r')) {
+        // Skip deleted-text runs
+        if (run.getElementsByTagNameNS(W,'del').length) continue;
+
+        let text = Array.from(run.getElementsByTagNameNS(W,'t'))
+                        .map(t => t.textContent).join('');
+        if (!text) continue;
+
+        const rPr = run.getElementsByTagNameNS(W,'rPr')[0];
+        if (rPr) {
+          const vAlign = rPr.getElementsByTagNameNS(W,'vertAlign')[0];
+          if (vAlign) {
+            const v = getWVal(vAlign);
+            if (v === 'superscript') text = `<sup>${text}</sup>`;
+            if (v === 'subscript')   text = `<sub>${text}</sub>`;
+          }
+          const bEl = rPr.getElementsByTagNameNS(W,'b')[0];
+          const iEl = rPr.getElementsByTagNameNS(W,'i')[0];
+          if (bEl && getWVal(bEl) !== '0' && getWVal(bEl) !== 'false') text = `<strong>${text}</strong>`;
+          if (iEl && getWVal(iEl) !== '0' && getWVal(iEl) !== 'false') text = `<em>${text}</em>`;
+        }
+        parts.push(text);
+      }
+
+      const paraText = parts.join('').trim();
+      if (paraText) yield { type: 'text', value: paraText };
+
+      // Images embedded in this paragraph
+      for (const blip of child.getElementsByTagNameNS(A,'blip')) {
+        const rId = getREmbed(blip);
+        if (rId) yield { type: 'image', value: rId };
+      }
+    }
+
+    // ── Table ───────────────────────────────────────────────────────────
+    else if (tag === 'tbl') {
+      const rows = [];
+      const seenImageRids = [];
+      for (const tr of child.getElementsByTagNameNS(W,'tr')) {
+        const cells = [];
+        for (const tc of tr.getElementsByTagNameNS(W,'tc')) {
+          // Extract formatted text (sup/sub/bold/italic) from runs
+          const parts = [];
+          for (const run of tc.getElementsByTagNameNS(W,'r')) {
+            if (run.getElementsByTagNameNS(W,'del').length) continue;
+            let text = Array.from(run.getElementsByTagNameNS(W,'t'))
+                            .map(t => t.textContent).join('');
+            if (!text) continue;
+            const rPr = run.getElementsByTagNameNS(W,'rPr')[0];
+            if (rPr) {
+              const vAlign = rPr.getElementsByTagNameNS(W,'vertAlign')[0];
+              if (vAlign) {
+                const v = getWVal(vAlign);
+                if (v === 'superscript') text = `<sup>${text}</sup>`;
+                if (v === 'subscript')   text = `<sub>${text}</sub>`;
+              }
+              const bEl = rPr.getElementsByTagNameNS(W,'b')[0];
+              const iEl = rPr.getElementsByTagNameNS(W,'i')[0];
+              if (bEl && getWVal(bEl) !== '0' && getWVal(bEl) !== 'false') text = `<strong>${text}</strong>`;
+              if (iEl && getWVal(iEl) !== '0' && getWVal(iEl) !== 'false') text = `<em>${text}</em>`;
+            }
+            parts.push(text);
+          }
+          cells.push(parts.join('').trim());
+          // Collect images inside this cell
+          for (const blip of tc.getElementsByTagNameNS(A,'blip')) {
+            const rId = getREmbed(blip);
+            if (rId && !seenImageRids.includes(rId)) seenImageRids.push(rId);
+          }
+        }
+        rows.push(cells);
+      }
+      yield { type: 'table', value: rows };
+      // Yield images found in table cells AFTER the table token
+      for (const rId of seenImageRids) yield { type: 'image', value: rId };
+    }
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Tokens → HTML (for QTI item stem)
+// ─────────────────────────────────────────────────────────────────────────────
+function tokensToHtml(tokens) {
+  return tokens.map(({ type, value }) => {
+    if (type === 'text') {
+      return `<div>${safeHtml(value)}</div>\n`;
+    }
+    if (type === 'image') {
+      return `\n<div><img alt="diagram" src="../assets/${value}"/></div>\n`;
+    }
+    if (type === 'table') {
+      let t = "<table border='1'>\n";
+      for (const row of value) {
+        t += '<tr>' + row.map(c => `<td>${escXml(c)}</td>`).join('') + '</tr>\n';
+      }
+      return t + '</table>\n';
+    }
+    return '';
+  }).join('');
+}
+
+function answerToString(tokens) {
+  if (!tokens || !tokens.length) return 'None';
+  return tokens.map(({ type, value }) =>
+    type === 'text'  ? value :
+    type === 'image' ? `[image:${value}]` :
+    type === 'table' ? '[table]' : ''
+  ).join(' ').trim() || 'None';
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// QTI 2.1 item builders
+// ─────────────────────────────────────────────────────────────────────────────
+const QTI_NS  = 'http://www.imsglobal.org/xsd/imsqti_v2p1';
+const QTI_XSD = 'http://www.imsglobal.org/xsd/imsqti_v2p1 http://www.imsglobal.org/xsd/qti/qtiv2p1/imsqti_v2p1.xsd';
+const LETTERS = ['a','b','c','d','e','f'];
+
+function mcqItemXml(q, answerText) {
+  const id  = `Q${pad3(q.qnum)}_${randomId()}`;
+  const ttl = escXml((q.tokens.find(t=>t.type==='text')?.value||'').slice(0,70));
+  let xml = `<assessmentItem xmlns="${QTI_NS}" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  adaptive="false" identifier="${id}" timeDependent="false"
+  title="Q${pad3(q.qnum)} ${ttl}"
+  xsi:schemaLocation="${QTI_XSD}">
+<responseDeclaration identifier="RESPONSE" cardinality="single" baseType="identifier">
+  <correctResponse><value>${escXml(answerText)}</value></correctResponse>
+</responseDeclaration>
+<outcomeDeclaration baseType="float" cardinality="single" identifier="SCORE"/>
+<itemBody>
+  <choiceInteraction responseIdentifier="RESPONSE" shuffle="true" maxChoices="1">
+    <prompt><div>\n${tokensToHtml(q.tokens)}</div></prompt>\n`;
+  q.options.slice(0,6).forEach((opt,i) => {
+    xml += `    <simpleChoice identifier="${LETTERS[i]}">${escXml(opt)}</simpleChoice>\n`;
+  });
+  xml += `  </choiceInteraction>
+</itemBody>
+<responseProcessing template="http://www.imsglobal.org/question/qti_v2p1/rptemplates/match_correct"/>
+</assessmentItem>`;
+  return { id, xml };
+}
+
+function essayItemXml(q, answerText) {
+  const id = `Q${pad3(q.qnum)}_${randomId()}`;
+  const xml = `<assessmentItem xmlns="${QTI_NS}" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  adaptive="false" identifier="${id}" timeDependent="false" title="Q${pad3(q.qnum)}"
+  xsi:schemaLocation="${QTI_XSD}">
+<responseDeclaration identifier="RESPONSE" cardinality="single" baseType="string"/>
+<correctResponse><value>${escXml(answerText)}</value></correctResponse>
+<outcomeDeclaration baseType="float" cardinality="single" identifier="SCORE"/>
+<itemBody>
+  <prompt>\n${tokensToHtml(q.tokens)}</prompt>
+  <extendedTextInteraction responseIdentifier="RESPONSE" expectedLength="400"/>
+</itemBody>
+<responseProcessing template="http://www.imsglobal.org/question/qti_v2p1/rptemplates/match_correct"/>
+</assessmentItem>`;
+  return { id, xml };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Main converter
+// msAnswers: optional dict from parseMarkScheme(), keyed by question number string
+// ─────────────────────────────────────────────────────────────────────────────
+async function convertDocxToQTI(file, msAnswers) {
+  msAnswers = msAnswers || {};
+
+  const buf     = await file.arrayBuffer();
+  const docxZip = await JSZip.loadAsync(buf);
+  const parser  = new DOMParser();
+
+  // ── Parse document.xml ──────────────────────────────────────────────
+  const docStr = await docxZip.file('word/document.xml').async('string');
+  const xmlDoc = parser.parseFromString(docStr, 'application/xml');
+  const body   = xmlDoc.getElementsByTagNameNS(W,'body')[0];
+  if (!body) throw new Error('Cannot find document body — is this a valid .docx file?');
+
+  // ── Parse relationships (to resolve image rIds) ──────────────────────
+  const imageRelTarget = {};   // rId → 'media/imageN.ext'
+  const relsFile = docxZip.file('word/_rels/document.xml.rels');
+  if (relsFile) {
+    const relsStr = await relsFile.async('string');
+    const relsDoc = parser.parseFromString(relsStr, 'application/xml');
+    for (const r of relsDoc.getElementsByTagName('Relationship')) {
+      if ((r.getAttribute('Type')||'').includes('image'))
+        imageRelTarget[r.getAttribute('Id')] = r.getAttribute('Target');
+    }
+  }
+
+  // ── Lazy image extractor ─────────────────────────────────────────────
+  let imgCounter = 0;
+  const resolvedImages = {};   // rId → {filename, data: Uint8Array}
+
+  async function resolveImage(rId) {
+    if (resolvedImages[rId]) return resolvedImages[rId].filename;
+    const target = imageRelTarget[rId];
+    if (!target) return null;
+    const entry = docxZip.file('word/' + target);
+    if (!entry) return null;
+    const ext      = (target.split('.').pop() || 'jpg').toLowerCase();
+    const filename = `img_${imgCounter++}.${ext}`;
+    const data     = await entry.async('uint8array');
+    resolvedImages[rId] = { filename, data };
+    return filename;
+  }
+
+  // ── Regex patterns ──────────────────────────────────────────────────
+  const Q_RE        = /^(\d+)\s+([\s\S]+)/;
+  const OPT_RE      = /^[A-D][\.\)]\s*(.*)/i;
+  // Allow up to 5 uppercase-letter prefix (Word cross-ref codes like "XX23")
+  const QNUM_ONLY   = /^[A-Z]{0,5}(\d{1,3})$/;   // table first-cell
+  const OPT_CELL_RE = /^([A-D])\s+(.*)/i;  // 'A   text' in a table options row
+  const ANS_RE      = /^ANSWERS\s*$/i;
+  const MAX_QNUM    = 200;   // ignore numbers > this (e.g. the year "2022")
+
+  // Parse question number from table first-cell (normalises 'XX23' → '23')
+  function parseQnum(cell) {
+    const m = QNUM_ONLY.exec((cell || '').trim());
+    if (m && parseInt(m[1]) <= MAX_QNUM) return m[1];
+    return null;
+  }
+
+  // Deduplicate merged Word table cells
+  function dedupCells(cells) {
+    const seen = new Set(), parts = [];
+    for (const c of cells) {
+      const t = c.trim();
+      if (t && !seen.has(t)) { seen.add(t); parts.push(t); }
+    }
+    return parts.join(' ');
+  }
+
+  // Extract MCQ option texts from a row like ['', 'A  text', 'B  text', ...]
+  function extractOptsFromRow(row) {
+    const opts = [];
+    for (const cell of row.slice(1)) {
+      const t = cell.trim();
+      if (!t) continue;
+      const m = OPT_CELL_RE.exec(t);
+      if (m) opts.push(m[2].trim());
+    }
+    return opts;
+  }
+
+  // ── State ───────────────────────────────────────────────────────────
+  const mcq        = [];
+  const structured = [];
+  let curQ = null, curOpts = [];
+  const inlineAnswers = {};
+  let inAnswers = false, curAQ = null, curATokens = [];
+
+  function flushQuestion() {
+    if (!curQ) return;
+    curOpts.length ? mcq.push({...curQ, options:[...curOpts]})
+                   : structured.push({...curQ});
+    curQ = null; curOpts = [];
+  }
+
+  // ── Resolve answer: MS file takes priority over inline ANSWERS section ──
+  function resolveAnswer(qnum) {
+    if (msAnswers[qnum] !== undefined) return msAnswers[qnum];
+    if (inlineAnswers[qnum])           return answerToString(inlineAnswers[qnum]);
+    return 'None';
+  }
+
+  // ── Walk document ───────────────────────────────────────────────────
+  for (const item of iterBlockItems(body)) {
+
+    // --- Answer section ---
+    if (inAnswers) {
+      if (item.type === 'image') {
+        if (curAQ !== null) {
+          const fn = await resolveImage(item.value);
+          if (fn) curATokens.push({ type:'image', value:fn });
+        }
+        continue;
+      }
+      if (item.type === 'table') {
+        if (curAQ !== null) curATokens.push({ type:'table', value:item.value });
+        continue;
+      }
+      const plain = stripTags(item.value).replace(/\xa0/g,' ').trim();
+      const aMatch = plain.match(/^(\d+)/);
+      if (aMatch) {
+        if (curAQ !== null) inlineAnswers[curAQ] = curATokens;
+        curAQ = aMatch[1];
+        const cleaned = plain.replace(/^\d+\s*/, '').trim();
+        curATokens = cleaned ? [{ type:'text', value:cleaned }] : [];
+      } else if (curAQ !== null) {
+        curATokens.push({ type:'text', value:plain });
+      }
+      continue;
+    }
+
+    // --- Images attach to current question ---
+    if (item.type === 'image') {
+      if (curQ) {
+        const fn = await resolveImage(item.value);
+        if (fn) curQ.tokens.push({ type:'image', value:fn });
+      }
+      continue;
+    }
+
+    // --- Table handling ---
+    if (item.type === 'table') {
+      const rows      = item.value;
+      if (!rows || !rows.length) continue;
+      const firstCell = (rows[0][0] || '').trim();
+      const detectedQnum = parseQnum(firstCell);
+
+      if (detectedQnum !== null) {
+        // ── Question-start table ──
+        flushQuestion();
+        curQ    = { qnum: detectedQnum, tokens: [] };
+        curOpts = [];
+
+        const qText = dedupCells(rows[0].slice(1));
+        if (qText) curQ.tokens.push({ type:'text', value: qText });
+
+        for (const row of rows.slice(1)) {
+          const r0 = (row[0] || '').trim();
+          const subQnum = parseQnum(r0);
+
+          if (subQnum !== null) {
+            // ── New question embedded inside this table (e.g. Q25 inside Q24's table) ──
+            flushQuestion();
+            curQ    = { qnum: subQnum, tokens: [] };
+            curOpts = [];
+            const qText2 = dedupCells(row.slice(1));
+            if (qText2) curQ.tokens.push({ type:'text', value: qText2 });
+
+          } else if (/^[A-D]$/i.test(r0)) {
+            // FIX: MCQ option row where the letter IS the first cell
+            // e.g. ['A', '10–6', '10–9', '10–12']  (Q1 format)
+            const optText = dedupCells(row.slice(1));
+            if (optText) curOpts.push(optText);
+          } else if (!r0) {
+            const opts = extractOptsFromRow(row);
+            if (opts.length >= 2) { curOpts.push(...opts); }
+            else {
+              const extra = dedupCells(row);
+              if (extra) curQ.tokens.push({ type:'text', value: extra });
+            }
+          } else {
+            const extra = dedupCells(row);
+            if (extra) curQ.tokens.push({ type:'text', value: extra });
+          }
+        }
+      } else if (curQ) {
+        // ── Continuation table ──
+        for (const row of rows) {
+          const t = dedupCells(row);
+          if (t) curQ.tokens.push({ type:'text', value: t });
+        }
+      }
+      continue;
+    }
+
+    // --- Plain text ---
+    const raw   = item.value;
+    const plain = stripTags(raw).replace(/\xa0/g,' ').replace(/\t/g,' ')
+                                .replace(/\s+/g,' ').trim();
+
+    if (ANS_RE.test(plain)) { inAnswers = true; continue; }
+    if (!plain) continue;
+
+    const qMatch = plain.match(Q_RE);
+    if (qMatch && parseInt(qMatch[1]) <= MAX_QNUM) {
+      flushQuestion();
+      curQ    = { qnum: qMatch[1], tokens: [] };
+      curOpts = [];
+      const bodyText = raw.replace(/^(?:<[^>]*>)*\d+(?:<\/[^>]*>)*\s*/,'').trim() || qMatch[2];
+      curQ.tokens.push({ type:'text', value: bodyText });
+      continue;
+    }
+
+    const optMatch = plain.match(OPT_RE);
+    if (optMatch && curQ) { curOpts.push(optMatch[1]); continue; }
+
+    if (curQ) curQ.tokens.push({ type:'text', value: raw });
+  }
+
+  // Flush last answer + question
+  if (curAQ !== null) inlineAnswers[curAQ] = curATokens;
+  flushQuestion();
+
+  const totalQ = mcq.length + structured.length;
+  if (totalQ === 0)
+    throw new Error('No questions found. Make sure each question starts with a number (e.g. "1 What is…").');
+
+  // ── Build output ZIP ─────────────────────────────────────────────────
+  const outZip    = new JSZip();
+  const itemsDir  = outZip.folder('items');
+  const assetsDir = outZip.folder('assets');
+
+  // Add extracted images
+  for (const { filename, data } of Object.values(resolvedImages)) {
+    assetsDir.file(filename, data);
+  }
+
+  const itemRefs   = [];
+  const itemImages = {};
+
+  // MCQ items
+  for (const q of mcq) {
+    const ans = resolveAnswer(q.qnum);
+    const { id, xml } = mcqItemXml(q, ans);
+    itemsDir.file(`${id}.xml`, xml);
+    itemRefs.push(id);
+    itemImages[id] = q.tokens.filter(t=>t.type==='image').map(t=>t.value);
+  }
+
+  // Structured / essay items
+  for (const q of structured) {
+    const ans = resolveAnswer(q.qnum);
+    const { id, xml } = essayItemXml(q, ans);
+    itemsDir.file(`${id}.xml`, xml);
+    itemRefs.push(id);
+    itemImages[id] = q.tokens.filter(t=>t.type==='image').map(t=>t.value);
+  }
+
+  // assessment_test.xml
+  let testXml = `<assessmentTest xmlns="${QTI_NS}" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  identifier="TEST1" title="Converted Test"
+  xsi:schemaLocation="${QTI_XSD}">
+<testPart identifier="part1" navigationMode="linear" submissionMode="individual">
+<assessmentSection identifier="section1" title="Converted Test" visible="true">
+`;
+  for (const id of itemRefs)
+    testXml += `<assessmentItemRef href="items/${id}.xml" identifier="${id}"/>\n`;
+  testXml += `</assessmentSection>\n</testPart>\n</assessmentTest>`;
+  outZip.file('assessment_test.xml', testXml);
+
+  // imsmanifest.xml
+  let manifest = `<manifest xmlns="http://www.imsglobal.org/xsd/imscp_v1p1"
+  xmlns:imsmd="http://www.imsglobal.org/xsd/imsmd_v1p2"
+  xmlns:imsqti="http://www.imsglobal.org/xsd/imsqti_metadata_v2p1"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  identifier="MANIFEST1"
+  xsi:schemaLocation="http://www.imsglobal.org/xsd/imscp_v1p1 http://www.imsglobal.org/xsd/imscp_v1p1.xsd">
+<metadata><schema>QTIv2.1 Package</schema><schemaversion>1.0.0</schemaversion></metadata>
+<organizations/>
+<resources>
+<resource identifier="RES_TEST" type="imsqti_test_xmlv2p1" href="assessment_test.xml">
+  <metadata/><file href="assessment_test.xml"/>
+</resource>
+`;
+  for (const id of itemRefs) {
+    manifest += `<resource identifier="RES_${id}" type="imsqti_item_xmlv2p1" href="items/${id}.xml">
+  <metadata/><file href="items/${id}.xml"/>\n`;
+    for (const img of (itemImages[id]||[]))
+      manifest += `  <file href="assets/${img}"/>\n`;
+    manifest += `</resource>\n`;
+  }
+  manifest += `</resources>\n</manifest>`;
+  outZip.file('imsmanifest.xml', manifest);
+
+  return outZip.generateAsync({ type:'blob', compression:'DEFLATE' });
+}
+</script>
+</body>
+</html>
