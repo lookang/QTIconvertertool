@@ -915,19 +915,25 @@ async function convertDocxToQTI(file, msAnswers) {
   const itemRefs   = [];
   const itemImages = {};
 
-  // MCQ items
-  for (const q of mcq) {
-    const ans = resolveAnswer(q.qnum);
-    const { id, xml } = mcqItemXml(q, ans);
-    itemsDir.file(`${id}.xml`, xml);
-    itemRefs.push(id);
-    itemImages[id] = q.tokens.filter(t=>t.type==='image').map(t=>t.value);
-  }
+  // ── Merge, deduplicate, and sort all questions before generating XML ──
+  // Problem: iterating mcq first then structured produces item_refs in
+  // two separate batches → SLS imports in wrong order (Q5 as #22, etc.).
+  // Additionally, some papers parse the cover page as a false Q1, giving
+  // a duplicate Q001 entry.
+  //
+  // Fix: build a Map keyed by qnum — MCQ entries win over structured
+  // (real MCQ questions have options; cover-page false positives don't).
+  // Then sort numerically so assessment_test.xml lists Q001, Q002 … in order.
+  const qByNum = new Map();   // qnum → { isMcq, q }
+  for (const q of mcq)        qByNum.set(q.qnum, { isMcq: true,  q });
+  for (const q of structured) if (!qByNum.has(q.qnum)) qByNum.set(q.qnum, { isMcq: false, q });
 
-  // Structured / essay items
-  for (const q of structured) {
+  const allQuestions = [...qByNum.values()]
+    .sort((a, b) => parseInt(a.q.qnum) - parseInt(b.q.qnum));
+
+  for (const { isMcq, q } of allQuestions) {
     const ans = resolveAnswer(q.qnum);
-    const { id, xml } = essayItemXml(q, ans);
+    const { id, xml } = isMcq ? mcqItemXml(q, ans) : essayItemXml(q, ans);
     itemsDir.file(`${id}.xml`, xml);
     itemRefs.push(id);
     itemImages[id] = q.tokens.filter(t=>t.type==='image').map(t=>t.value);

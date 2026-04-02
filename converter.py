@@ -610,29 +610,53 @@ def convert_docx_to_qti(input_docx, job_dir, ms_answers=None):
 
     letters = ["a", "b", "c", "d", "e", "f"]
 
-    # -----------------------------
-    # MCQ QUESTIONS → QTI
-    # -----------------------------
+    # ---------------------------------------------------------------
+    # MERGE + DEDUPLICATE + SORT all questions before generating XML.
+    #
+    # Problem: iterating mcq_questions first then structured_questions
+    # produces item_refs in two unordered batches, so SLS imports them
+    # in wrong order (Q5 shows as SLS question 22, etc.).
+    # Additionally, some papers produce a false Q1 from cover-page
+    # text ("1 hour …") giving two Q001 entries.
+    #
+    # Fix: build a dict keyed by qnum — MCQ entries win over structured
+    # (real MCQ questions have options; cover-page false positives do not).
+    # Then sort numerically so assessment_test.xml lists Q001, Q002 … in order.
+    # ---------------------------------------------------------------
+    q_by_num = {}   # qnum → ('mcq'|'structured', q_dict)
     for q in mcq_questions:
+        q_by_num[q['qnum']] = ('mcq', q)
+    for q in structured_questions:
+        if q['qnum'] not in q_by_num:          # don't overwrite real MCQ with cover-page structured
+            q_by_num[q['qnum']] = ('structured', q)
 
-        answer_text = resolve_answer(q["qnum"], is_mcq=True)
+    all_questions = sorted(q_by_num.values(), key=lambda p: int(p[1]['qnum']))
 
-        item_id  = f"Q{int(q['qnum']):03d}_{random_id()}"
-        filename = os.path.join(items_dir, f"{item_id}.xml")
+    # -----------------------------
+    # ALL QUESTIONS → QTI (in numerical order)
+    # -----------------------------
+    for qtype, q in all_questions:
 
-        stem_html = tokens_to_html(q["tokens"])
+        if qtype == 'mcq':
 
-        title_text = ""
-        for ttype, val in q["tokens"]:
-            if ttype == "text":
-                title_text = val
-                break
+            answer_text = resolve_answer(q["qnum"], is_mcq=True)
 
-        # Strip HTML tags for the XML title attribute (plain text only)
-        title_plain = re.sub(r'<[^>]+>', '', title_text)[:70]
-        safe_title = saxutils.escape(title_plain)
+            item_id  = f"Q{int(q['qnum']):03d}_{random_id()}"
+            filename = os.path.join(items_dir, f"{item_id}.xml")
 
-        xml = f'''<assessmentItem xmlns="http://www.imsglobal.org/xsd/imsqti_v2p1"
+            stem_html = tokens_to_html(q["tokens"])
+
+            title_text = ""
+            for ttype, val in q["tokens"]:
+                if ttype == "text":
+                    title_text = val
+                    break
+
+            # Strip HTML tags for the XML title attribute (plain text only)
+            title_plain = re.sub(r'<[^>]+>', '', title_text)[:70]
+            safe_title = saxutils.escape(title_plain)
+
+            xml = f'''<assessmentItem xmlns="http://www.imsglobal.org/xsd/imsqti_v2p1"
 xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
 adaptive="false"
 identifier="{item_id}"
@@ -654,40 +678,30 @@ xsi:schemaLocation="http://www.imsglobal.org/xsd/imsqti_v2p1 http://www.imsgloba
 </prompt>
 '''
 
-        for i, opt in enumerate(q["options"]):
-            if i >= len(letters):
-                break
-            safe = saxutils.escape(opt)
-            safe = safe.replace("&lt;", "<").replace("&gt;", ">")
-            xml += f'<simpleChoice identifier="{letters[i]}">{safe}</simpleChoice>\n'
+            for i, opt in enumerate(q["options"]):
+                if i >= len(letters):
+                    break
+                safe = saxutils.escape(opt)
+                safe = safe.replace("&lt;", "<").replace("&gt;", ">")
+                xml += f'<simpleChoice identifier="{letters[i]}">{safe}</simpleChoice>\n'
 
-        xml += '''
+            xml += '''
 </choiceInteraction>
 </itemBody>
 <responseProcessing template="http://www.imsglobal.org/question/qti_v2p1/rptemplates/match_correct"/>
 </assessmentItem>
 '''
 
-        with open(filename, "w", encoding="utf-8") as f:
-            f.write(xml)
+        else:  # structured
 
-        item_refs.append(item_id)
-        imgs = [v for t, v in q["tokens"] if t == "image"]
-        item_images[item_id] = imgs
+            answer_text = resolve_answer(q["qnum"])
 
-    # -----------------------------
-    # STRUCTURED QUESTIONS → QTI
-    # -----------------------------
-    for q in structured_questions:
+            item_id  = f"Q{int(q['qnum']):03d}_{random_id()}"
+            filename = os.path.join(items_dir, f"{item_id}.xml")
 
-        answer_text = resolve_answer(q["qnum"])
+            stem_html = tokens_to_html(q["tokens"])
 
-        item_id  = f"Q{int(q['qnum']):03d}_{random_id()}"
-        filename = os.path.join(items_dir, f"{item_id}.xml")
-
-        stem_html = tokens_to_html(q["tokens"])
-
-        xml = f'''<assessmentItem xmlns="http://www.imsglobal.org/xsd/imsqti_v2p1"
+            xml = f'''<assessmentItem xmlns="http://www.imsglobal.org/xsd/imsqti_v2p1"
 xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
 adaptive="false"
 identifier="{item_id}"
