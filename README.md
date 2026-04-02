@@ -195,4 +195,4 @@ No installation required — open in any modern browser and convert directly.
 This tool was built upon the first prototype by **Low Jun Hua**:
 [https://github.com/junhualow/docx-qti-converter](https://github.com/junhualow/docx-qti-converter)
 
-Built to support Singapore JC Physics teachers converting prelim examination papers for use in digital learning platforms.
+Built to support Singapore teachers converting examination papers for use in digital learning platforms.
