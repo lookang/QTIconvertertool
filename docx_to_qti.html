@@ -84,6 +84,44 @@
     button:hover    { background: #1e4ed8; }
     button:disabled { opacity: .5; cursor: not-allowed; }
 
+    /* Force-MCQ label */
+    #forceMcqLabel {
+      display: flex; align-items: center; gap: 8px;
+      margin-top: 12px; font-size: 14px; color: #374151;
+      cursor: pointer; user-select: none;
+    }
+    #forceMcqLabel input[type=checkbox] { width: 16px; height: 16px; cursor: pointer; }
+
+    /* ── Quick-load dev bar ──────────────────────────────────────────── */
+    #quickLoad {
+      margin-top: 18px; padding: 12px 14px;
+      background: #f8faff; border: 1.5px dashed #93c5fd;
+      border-radius: 10px; font-size: 13px;
+    }
+    #quickLoad summary {
+      cursor: pointer; color: #2563eb; font-weight: 600;
+      list-style: none; display: flex; align-items: center; gap: 6px;
+    }
+    #quickLoad summary::-webkit-details-marker { display: none; }
+    #quickLoad summary::before { content: '▶'; font-size: 10px; transition: .2s; }
+    #quickLoad[open] summary::before { content: '▼'; }
+    .ql-grid {
+      display: grid; grid-template-columns: 1fr 1fr;
+      gap: 7px; margin-top: 10px;
+    }
+    .ql-btn {
+      all: unset; box-sizing: border-box;
+      padding: 7px 10px; border-radius: 7px;
+      background: #fff; border: 1.5px solid #bfdbfe;
+      font-size: 12px; color: #1e40af; cursor: pointer;
+      text-align: left; line-height: 1.4;
+      transition: background .15s, border-color .15s;
+    }
+    .ql-btn:hover { background: #eff6ff; border-color: #3b82f6; }
+    .ql-btn strong { display: block; font-size: 13px; margin-bottom: 1px; }
+    .ql-btn.ql-active { background: #dbeafe; border-color: #2563eb; }
+    .ql-status { margin-top: 8px; font-size: 12px; color: #6b7280; min-height: 16px; }
+
     #spinner { display: none; text-align: center; margin-top: 15px; }
     #message  { margin-top: 20px; text-align: center; }
     .error   { color: #dc2626; }
@@ -150,9 +188,18 @@
     .q-type-badge {
       font-size: 11px; font-weight: 700; padding: 2px 7px;
       border-radius: 4px; text-transform: uppercase; letter-spacing: .4px;
+      cursor: pointer; user-select: none;
     }
+    .q-type-badge:hover { opacity: .75; }
     .q-type-badge.mcq   { background: #dbeafe; color: #1e40af; }
     .q-type-badge.essay { background: #f3e8ff; color: #7c3aed; }
+
+    /* Option image thumbnails inside option rows */
+    .opt-img {
+      max-height: 100px; max-width: 220px;
+      border-radius: 6px; border: 1px solid #e5e7eb;
+      background: #f9fafb; display: block; margin: 0;
+    }
 
     /* Stem segments */
     .q-stem { margin-bottom: 12px; }
@@ -265,6 +312,43 @@
   </div>
   <input type="file" id="msFileInput" accept=".docx" hidden>
 
+  <!-- Quick-load test files (dev convenience) -->
+  <details id="quickLoad">
+    <summary>🧪 Quick Load — test files</summary>
+    <div class="ql-grid">
+      <button class="ql-btn" data-qp="files/doc/2022 JC2 H1 Physics Prelim P1.docx"
+                              data-ms="files/doc/2022 JC2 H1 Physics Prelim P1 MS.docx"
+                              data-mcq="1">
+        <strong>H1 P1</strong>2022 JC2 · 30 MCQ
+      </button>
+      <button class="ql-btn" data-qp="files/doc/2022 JC2 H1 Physics Prelim P2.docx"
+                              data-ms="files/doc/2022 JC2 H1 Physics Prelim P2 MS.docx">
+        <strong>H1 P2</strong>2022 JC2 · Structured
+      </button>
+      <button class="ql-btn" data-qp="files/doc/2022 JC2 H2 Physics Prelim P1.docx"
+                              data-ms="files/doc/2022 JC2 H2 Physics Prelim P1 MS (for sharing with other colleges).docx"
+                              data-mcq="1">
+        <strong>H2 P1</strong>2022 JC2 · 30 MCQ
+      </button>
+      <button class="ql-btn" data-qp="files/doc/2022 JC2 H2 Physics Prelim P2 .docx"
+                              data-ms="files/doc/2022 JC2 H2 Physics Prelim P2 MS (for sharing with other colleges).docx">
+        <strong>H2 P2</strong>2022 JC2 · Structured
+      </button>
+      <button class="ql-btn" data-qp="files/doc/2022 JC2 H2 Physics Prelim P3.docx"
+                              data-ms="files/doc/2022 JC2 H2 Physics Prelim P3 MS (for sharing with other colleges).docx">
+        <strong>H2 P3</strong>2022 JC2 · Structured
+      </button>
+    </div>
+    <div class="ql-status" id="qlStatus"></div>
+  </details>
+
+  <!-- Force-MCQ toggle -->
+  <label id="forceMcqLabel">
+    <input type="checkbox" id="forceMcqCheck">
+    All questions are MCQ (Paper 1 / multiple-choice only)
+    <span class="ms-badge" style="background:#fef3c7;color:#92400e">forces MCQ</span>
+  </label>
+
   <button id="convertBtn" disabled>Convert Document</button>
   <div id="spinner">⏳ Converting… please wait</div>
   <div id="message"></div>
@@ -286,23 +370,33 @@
   </div>
 
   <div class="instructions">
-    <h2>How to format your document</h2>
+    <h2>How to use this converter</h2>
+
+    <h3 style="margin:18px 0 6px;font-size:16px;color:#1e40af;">Step 1 — Upload</h3>
     <ul>
-      <li>Start each question with a number (e.g. <b>1 What is...</b>)</li>
-      <li>Images with text overlay should be "cleaned up" by replacing them with screenshots.</li>
-      <li>MCQ options should be labelled <b>A.</b> / <b>B.</b> / <b>C.</b> / <b>D.</b> or <b>A)</b> / <b>B)</b> / <b>C)</b> / <b>D)</b></li>
-      <li>Structured questions will be extracted as a whole (including parts/subparts).</li>
-      <li>Indents (e.g., a), (i), etc) should not be used; replace them with plain text instead.</li>
-      <li>Append answers at the bottom and begin the section with the capitalised word <b>ANSWERS</b>.</li>
-      <li>Answers for parts/subparts: the question number appears only on the <em>first</em> part — see sample doc Q4.</li>
-      <li><b>Mark scheme</b>: upload the matching MS file above to automatically populate <code>correctResponse</code> in each QTI item.</li>
+      <li>Drag your question paper <b>.docx</b> into the top zone (or click to browse).</li>
+      <li>Optionally add the matching <b>mark scheme .docx</b> — correct answers are injected automatically.</li>
+      <li>For <b>Paper 1 (all MCQ)</b> papers, tick <em>All questions are MCQ</em> before converting.</li>
+      <li>Click <b>Convert Document</b>.</li>
     </ul>
 
-    <div class="sample-container">
-      <img id="sampleImage" src="sample_doc.png" alt="Sample document"
-           onerror="this.parentElement.style.display='none'">
-      <div style="font-size:13px;color:#666;margin-top:6px;">Click image to zoom</div>
-    </div>
+    <h3 style="margin:18px 0 6px;font-size:16px;color:#1e40af;">Step 2 — Review &amp; Edit</h3>
+    <ul>
+      <li>Every detected question appears as a card showing its stem, options, and correct answer.</li>
+      <li><b>Click the MCQ / Essay badge</b> on any card to toggle the question type if it was mis-detected.</li>
+      <li><b>Click any stem text</b> to edit it directly — changes are live.</li>
+      <li><b>Edit option text</b> in the A / B / C / D fields as needed.</li>
+      <li>Use the <b>correct-answer dropdown</b> to set or change which option is correct — the letter turns green instantly.</li>
+      <li>Images are displayed as-is and cannot be edited here; fix them in Word before converting.</li>
+    </ul>
+
+    <h3 style="margin:18px 0 6px;font-size:16px;color:#1e40af;">Step 3 — Export</h3>
+    <ul>
+      <li>When satisfied, click <b>📦 Export QTI ZIP</b> at the bottom of the page.</li>
+      <li>The downloaded ZIP reflects all edits made in Step 2 — no re-upload needed.</li>
+      <li>Import the ZIP directly into <b>Singapore Student Learning Space (SLS)</b> via the QTI upload flow.</li>
+      <li>Click <b>↩ New File</b> to reset and convert a different document.</li>
+    </ul>
 
     <h2>Sample QTI Downloads</h2>
     <p style="color:#555;font-size:14px;margin-top:0">Ready-to-import QTI packages converted from Singapore Physics prelim papers. Upload directly to SLS.</p>
@@ -410,6 +504,48 @@ function setMsFile(f) {
   msDropZone.classList.add('has-file');
 }
 
+// ── Quick-load buttons ────────────────────────────────────────────────────
+const DOCX_MIME = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+
+async function fetchDocx(path) {
+  const res = await fetch(path);
+  if (!res.ok) throw new Error(`Cannot fetch "${path}" (${res.status})`);
+  const blob = await res.blob();
+  return new File([blob], path.split('/').pop(), { type: DOCX_MIME });
+}
+
+document.querySelectorAll('.ql-btn').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const qlStatus = document.getElementById('qlStatus');
+    const qpPath   = btn.dataset.qp;
+    const msPath   = btn.dataset.ms;
+    const isMcq    = btn.dataset.mcq === '1';
+
+    // Mark active
+    document.querySelectorAll('.ql-btn').forEach(b => b.classList.remove('ql-active'));
+    btn.classList.add('ql-active');
+    qlStatus.textContent = '⏳ Fetching files…';
+
+    try {
+      const qpFile = await fetchDocx(qpPath);
+      setFile(qpFile);
+
+      if (msPath) {
+        const msFile = await fetchDocx(msPath);
+        setMsFile(msFile);
+      }
+
+      // Auto-tick Force MCQ for P1 papers
+      document.getElementById('forceMcqCheck').checked = isMcq;
+
+      qlStatus.textContent = `✅ Loaded: ${qpFile.name}${msPath ? ' + MS' : ''}`;
+    } catch (e) {
+      qlStatus.textContent = `✗ ${e.message} — run via HTTP server (python3 -m http.server 8080)`;
+      btn.classList.remove('ql-active');
+    }
+  });
+});
+
 // ── Convert button ────────────────────────────────────────────────────────
 convertBtn.addEventListener('click', async () => {
   if (!selectedFile) return;
@@ -424,11 +560,28 @@ convertBtn.addEventListener('click', async () => {
       catch (e) { console.warn('MS parse failed:', e); }
     }
 
-    const baseName = selectedFile.name.replace(/\.docx$/i, '');
+    const baseName  = selectedFile.name.replace(/\.docx$/i, '');
+    const forceMcq  = document.getElementById('forceMcqCheck').checked;
     const { allQuestions, resolvedImages } = await parseDocxToQuestions(selectedFile, msAnswers);
+
+    // Force-MCQ: convert every Essay question to MCQ with empty options
+    if (forceMcq) {
+      for (const entry of allQuestions) {
+        if (!entry.isMcq) {
+          entry.isMcq = true;
+          if (!entry.q.options || !entry.q.options.length) {
+            entry.q.options      = ['', '', '', ''];
+            entry.q.optionImages = [null, null, null, null];
+          }
+        }
+      }
+    }
+
     renderEditor(allQuestions, resolvedImages, baseName);
-    const withMs = selectedMsFile ? ' (with mark scheme answers)' : '';
-    showMsg('', `✅ Parsed ${allQuestions.length} questions — review &amp; edit below, then export`);
+    const mcqCount   = allQuestions.filter(e => e.isMcq).length;
+    const essayCount = allQuestions.length - mcqCount;
+    const typeNote   = forceMcq ? ' (all forced MCQ)' : ` — ${mcqCount} MCQ, ${essayCount} Essay`;
+    showMsg('', `✅ Parsed ${allQuestions.length} questions${typeNote} — review &amp; edit below, then export`);
   } catch (err) {
     showMsg('error', '✗ ' + err.message);
   } finally {
@@ -463,6 +616,7 @@ modal.onclick = () => { modal.style.display = 'none'; };
 const W   = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const A   = 'http://schemas.openxmlformats.org/drawingml/2006/main';
 const REL = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+const VML = 'urn:schemas-microsoft-com:vml';  // legacy VML image format
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Low-level helpers
@@ -650,9 +804,13 @@ function* iterBlockItems(body) {
       const paraText = mergeAdjacentTags(parts.join('').trim());
       if (paraText) yield { type: 'text', value: paraText };
 
-      // Images embedded in this paragraph
+      // Images embedded in this paragraph — DrawingML (modern) + VML (legacy)
       for (const blip of child.getElementsByTagNameNS(A,'blip')) {
         const rId = getREmbed(blip);
+        if (rId) yield { type: 'image', value: rId };
+      }
+      for (const imgdata of child.getElementsByTagNameNS(VML,'imagedata')) {
+        const rId = imgdata.getAttributeNS(REL,'id') || imgdata.getAttribute('r:id') || '';
         if (rId) yield { type: 'image', value: rId };
       }
     }
@@ -660,12 +818,16 @@ function* iterBlockItems(body) {
     // ── Table ───────────────────────────────────────────────────────────
     else if (tag === 'tbl') {
       const rows = [];
-      const seenImageRids = [];
+      const rowImages  = [];   // rowImages[i]    = all rIds in row i
+      const cellImages = [];   // cellImages[i][j] = rIds in cell (i,j)
+      const seenRids = new Set();
 
       // Walk ALL <w:tr> descendants (includes nested table rows so that
       // "which row?" questions have their A/B/C/D option rows processed).
       for (const tr of child.getElementsByTagNameNS(W,'tr')) {
         const cells = [];
+        const thisRowImgs = [];
+        const thisRowCellImgs = [];   // per-cell images for this row
 
         // Use DIRECT <w:tc> children of this row only.
         // getElementsByTagNameNS would also return cells from any nested tables
@@ -715,18 +877,31 @@ function* iterBlockItems(body) {
           }
           cells.push(paraTexts.join(' '));
 
-          // Collect images from ALL descendants of this cell (images in nested
-          // option rows are also captured; seen_image_rids prevents duplicates).
+          // Collect images from this cell — DrawingML + VML — per-cell and per-row
+          const thisCellImgs = [];
           for (const blip of tc.getElementsByTagNameNS(A,'blip')) {
             const rId = getREmbed(blip);
-            if (rId && !seenImageRids.includes(rId)) seenImageRids.push(rId);
+            if (rId && !seenRids.has(rId)) { seenRids.add(rId); thisCellImgs.push(rId); thisRowImgs.push(rId); }
           }
+          for (const imgdata of tc.getElementsByTagNameNS(VML,'imagedata')) {
+            const rId = imgdata.getAttributeNS(REL,'id') || imgdata.getAttribute('r:id') || '';
+            if (rId && !seenRids.has(rId)) { seenRids.add(rId); thisCellImgs.push(rId); thisRowImgs.push(rId); }
+          }
+          thisRowCellImgs.push(thisCellImgs);
         }
         rows.push(cells);
+        rowImages.push(thisRowImgs);
+        cellImages.push(thisRowCellImgs);
       }
-      yield { type: 'table', value: rows };
-      // Yield images found in table cells AFTER the table token
-      for (const rId of seenImageRids) yield { type: 'image', value: rId };
+      yield { type: 'table', value: rows, rowImages, cellImages };
+      // Yield images from non-option rows as stem images after the table.
+      // Option rows (first cell = single letter A-D) keep their images at option level.
+      for (let ri = 0; ri < rows.length; ri++) {
+        const fp = (rows[ri][0] || '').replace(/<[^>]+>/g, '').trim();
+        if (!/^[A-D]$/i.test(fp)) {
+          for (const rId of rowImages[ri]) yield { type: 'image', value: rId };
+        }
+      }
     }
   }
 }
@@ -784,7 +959,9 @@ function mcqItemXml(q, answerText) {
   <choiceInteraction responseIdentifier="RESPONSE" shuffle="true" maxChoices="1">
     <prompt><div>\n${tokensToHtml(q.tokens)}</div></prompt>\n`;
   q.options.slice(0,6).forEach((opt,i) => {
-    xml += `    <simpleChoice identifier="${LETTERS[i]}">${safeHtml(opt)}</simpleChoice>\n`;
+    const optImgFn = q.optionImages && q.optionImages[i];
+    const imgTag   = optImgFn ? `<img alt="option ${LETTERS[i].toUpperCase()}" src="../assets/${optImgFn}"/>` : '';
+    xml += `    <simpleChoice identifier="${LETTERS[i]}">${imgTag}${safeHtml(opt)}</simpleChoice>\n`;
   });
   xml += `  </choiceInteraction>
 </itemBody>
@@ -907,18 +1084,50 @@ async function parseDocxToQuestions(file, msAnswers) {
     return opts;
   }
 
+  // ── Detect transposed options: A B C D appear as column headers ─────
+  // e.g. Row: ['', 'A', 'B', 'C', 'D'] or Row: ['A', 'B', 'C', 'D', ...]
+  // Returns { headerRowIdx, optStartCol } or null.
+  function findTransposedOptions(rows) {
+    for (let ri = 0; ri < Math.min(rows.length, 4); ri++) {
+      const cols = rows[ri].map(c => c.replace(/<[^>]+>/g,'').trim().toUpperCase());
+      for (let ci = 0; ci <= cols.length - 4; ci++) {
+        if (cols[ci]==='A' && cols[ci+1]==='B' && cols[ci+2]==='C' && cols[ci+3]==='D') {
+          return { headerRowIdx: ri, optStartCol: ci };
+        }
+      }
+    }
+    return null;
+  }
+
+  // Extract column-wise option images from rows after the header row.
+  // Returns [fnA, fnB, fnC, fnD] (filenames, null if no image found).
+  async function extractTransposedOptImages(rows, ci_base, headerRowIdx, tblCellImages) {
+    const optImgs = [null, null, null, null];
+    for (let ri = headerRowIdx + 1; ri < rows.length; ri++) {
+      const rowCells = tblCellImages ? (tblCellImages[ri] || []) : [];
+      for (let oi = 0; oi < 4; oi++) {
+        if (optImgs[oi]) continue;          // already found one for this column
+        const cellRids = rowCells[ci_base + oi] || [];
+        if (cellRids.length) {
+          optImgs[oi] = await resolveImage(cellRids[0]);
+        }
+      }
+    }
+    return optImgs;
+  }
+
   // ── State ───────────────────────────────────────────────────────────
   const mcq        = [];
   const structured = [];
-  let curQ = null, curOpts = [];
+  let curQ = null, curOpts = [], curOptImages = [];
   const inlineAnswers = {};
   let inAnswers = false, curAQ = null, curATokens = [];
 
   function flushQuestion() {
     if (!curQ) return;
-    curOpts.length ? mcq.push({...curQ, options:[...curOpts]})
+    curOpts.length ? mcq.push({...curQ, options:[...curOpts], optionImages:[...curOptImages]})
                    : structured.push({...curQ});
-    curQ = null; curOpts = [];
+    curQ = null; curOpts = []; curOptImages = [];
   }
 
   // ── Resolve answer: MS file takes priority over inline ANSWERS section ──
@@ -977,12 +1186,28 @@ async function parseDocxToQuestions(file, msAnswers) {
         // ── Question-start table ──
         flushQuestion();
         curQ    = { qnum: detectedQnum, tokens: [] };
-        curOpts = [];
+        curOpts = []; curOptImages = [];
 
         const qText = dedupCells(rows[0].slice(1));
         if (qText) curQ.tokens.push({ type:'text', value: qText });
 
-        for (const row of rows.slice(1)) {
+        // Check for transposed A/B/C/D column-header format within this table
+        const transpHdrQ = findTransposedOptions(rows.slice(1));
+        if (transpHdrQ !== null) {
+          const { headerRowIdx: hri, optStartCol } = transpHdrQ;
+          const absHri = hri + 1; // offset because we sliced from row 1
+          // Rows between question row and header → stem text
+          for (let ri = 1; ri < absHri; ri++) {
+            const t = dedupCells(rows[ri]);
+            if (t) curQ.tokens.push({ type:'text', value: t });
+          }
+          curOpts = ['', '', '', ''];
+          curOptImages = await extractTransposedOptImages(rows, optStartCol, absHri, item.cellImages);
+        } else
+
+        // Use indexed loop so we can look up rowImages[ri] for option images
+        for (let ri = 1; ri < rows.length; ri++) {
+          const row     = rows[ri];
           const r0      = (row[0] || '').trim();
           const r0plain = r0.replace(/<[^>]+>/g, '').trim(); // strip HTML for detection
           const subQnum = parseQnum(r0);
@@ -991,19 +1216,28 @@ async function parseDocxToQuestions(file, msAnswers) {
             // ── New question embedded inside this table (e.g. Q25 inside Q24's table) ──
             flushQuestion();
             curQ    = { qnum: subQnum, tokens: [] };
-            curOpts = [];
+            curOpts = []; curOptImages = [];
             const qText2 = dedupCells(row.slice(1));
             if (qText2) curQ.tokens.push({ type:'text', value: qText2 });
 
           } else if (/^[A-D]$/i.test(r0plain)) {
-            // FIX: MCQ option row where the letter IS the first cell
-            // e.g. ['A', '10–6', '10–9', '10–12']  (Q1 format)
+            // MCQ option row where the letter IS the first cell
+            // e.g. ['A', '10–6', '10–9', '10–12']  or  ['A', '(image)']
             const optText = dedupCells(row.slice(1));
-            if (optText) curOpts.push(optText);
+            // Always push even if text is empty (image-only options like diagrams A/B/C/D)
+            curOpts.push(optText || '');
+            // Capture the first image in this option row (if any)
+            const optRids = item.rowImages ? (item.rowImages[ri] || []) : [];
+            const optFn   = optRids.length ? await resolveImage(optRids[0]) : null;
+            curOptImages.push(optFn);
+
           } else if (!r0) {
             const opts = extractOptsFromRow(row);
-            if (opts.length >= 2) { curOpts.push(...opts); }
-            else {
+            if (opts.length >= 2) {
+              curOpts.push(...opts);
+              // No per-option images for this format (letter embedded in cell text)
+              for (let k = 0; k < opts.length; k++) curOptImages.push(null);
+            } else {
               const extra = dedupCells(row);
               if (extra) curQ.tokens.push({ type:'text', value: extra });
             }
@@ -1013,10 +1247,33 @@ async function parseDocxToQuestions(file, msAnswers) {
           }
         }
       } else if (curQ) {
-        // ── Continuation table ──
-        for (const row of rows) {
-          const t = dedupCells(row);
-          if (t) curQ.tokens.push({ type:'text', value: t });
+        // ── Continuation table — detect A/B/C/D option rows OR transposed format ──
+        const transpHdr = findTransposedOptions(rows);
+        if (transpHdr !== null && !curOpts.length) {
+          // Transposed format: A B C D appear as column headers.
+          // Collect images column-wise; row labels before header go to stem text.
+          const { headerRowIdx, optStartCol } = transpHdr;
+          for (let ri = 0; ri < headerRowIdx; ri++) {
+            const t = dedupCells(rows[ri]);
+            if (t) curQ.tokens.push({ type:'text', value: t });
+          }
+          curOpts = ['', '', '', ''];
+          curOptImages = await extractTransposedOptImages(rows, optStartCol, headerRowIdx, item.cellImages);
+        } else {
+          for (let ri = 0; ri < rows.length; ri++) {
+            const row     = rows[ri];
+            const r0plain = (row[0] || '').replace(/<[^>]+>/g, '').trim();
+            if (/^[A-D]$/i.test(r0plain)) {
+              const optText = dedupCells(row.slice(1));
+              curOpts.push(optText || '');
+              const optRids = item.rowImages ? (item.rowImages[ri] || []) : [];
+              const optFn   = optRids.length ? await resolveImage(optRids[0]) : null;
+              curOptImages.push(optFn);
+            } else {
+              const t = dedupCells(row);
+              if (t) curQ.tokens.push({ type:'text', value: t });
+            }
+          }
         }
       }
       continue;
@@ -1082,7 +1339,9 @@ async function buildQtiZipBlob(allQuestions, resolvedImages) {
     const { id, xml } = isMcq ? mcqItemXml(q, answer) : essayItemXml(q, answer);
     itemsDir.file(`${id}.xml`, xml);
     itemRefs.push(id);
-    itemImages[id] = q.tokens.filter(t => t.type === 'image').map(t => t.value);
+    const stemImgs = q.tokens.filter(t => t.type === 'image').map(t => t.value);
+    const optImgs  = (q.optionImages || []).filter(Boolean);
+    itemImages[id] = [...new Set([...stemImgs, ...optImgs])];
   }
 
   let testXml = `<assessmentTest xmlns="${QTI_NS}" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
@@ -1170,8 +1429,19 @@ function buildCard(entry, imageUrls, idx) {
   hdr.className = 'q-card-header';
   hdr.innerHTML = `
     <span class="q-num-badge">Q${q.qnum}</span>
-    <span class="q-type-badge ${isMcq ? 'mcq' : 'essay'}">${isMcq ? 'MCQ' : 'Essay'}</span>`;
+    <span class="q-type-badge ${isMcq ? 'mcq' : 'essay'}" title="Click to toggle MCQ / Essay">${isMcq ? 'MCQ' : 'Essay'}</span>`;
   card.appendChild(hdr);
+
+  // Type-toggle: clicking the badge swaps MCQ ↔ Essay and rebuilds the card
+  hdr.querySelector('.q-type-badge').addEventListener('click', () => {
+    const e = editorState.allQuestions[idx];
+    e.isMcq = !e.isMcq;
+    if (e.isMcq && (!e.q.options || !e.q.options.length)) {
+      e.q.options      = ['', '', '', ''];
+      e.q.optionImages = [null, null, null, null];
+    }
+    card.replaceWith(buildCard(e, editorState.imageUrls, idx));
+  });
 
   // ── Stem ────────────────────────────────────────────────────────────
   const stemWrap = document.createElement('div');
@@ -1227,20 +1497,37 @@ function buildCard(entry, imageUrls, idx) {
     q.options.forEach((opt, oi) => {
       const row = document.createElement('div');
       row.className = 'option-row';
+      row.style.alignItems = 'flex-start';
 
       const lbl = document.createElement('span');
       lbl.className = 'opt-letter';
       lbl.textContent = LETTERS[oi].toUpperCase();
       lbl.setAttribute('data-opt-idx', oi);
+      lbl.style.marginTop = '6px';
+      row.appendChild(lbl);
+
+      // Option may have an image (diagram), text, or both
+      const optImgFn = q.optionImages && q.optionImages[oi];
+      const wrap = document.createElement('div');
+      wrap.style.flex = '1';
+
+      if (optImgFn && imageUrls[optImgFn]) {
+        const img = document.createElement('img');
+        img.className = 'opt-img';
+        img.src = imageUrls[optImgFn];
+        img.alt = `Option ${LETTERS[oi].toUpperCase()}`;
+        wrap.appendChild(img);
+      }
 
       const inp = document.createElement('input');
       inp.type = 'text';
       inp.className = 'opt-input';
-      inp.value = stripTags(opt);   // plain text for the input field
+      inp.value = stripTags(opt);
       inp.setAttribute('data-opt-idx', oi);
+      inp.style.marginTop = optImgFn ? '4px' : '0';
+      wrap.appendChild(inp);
 
-      row.appendChild(lbl);
-      row.appendChild(inp);
+      row.appendChild(wrap);
       optsWrap.appendChild(row);
     });
     card.appendChild(optsWrap);
