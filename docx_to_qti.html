@@ -333,6 +333,24 @@ function mergeAdjacentTags(text) {
   }
   return text;
 }
+function halfIfDoubled(s) {
+  // Recursively halve a string that is an exact repeat of itself.
+  // Fixes Word XML diagram labels duplicated in cells: 'cablecable'→'cable',
+  // ×4 repetition: 'tension in cabletension in cabletension in cabletension in cable'
+  // → ×2 → ×1 via recursion.
+  const n = s.length;
+  if (n >= 10 && n % 2 === 0) {
+    const mid = n >> 1;
+    if (s.slice(0, mid) === s.slice(mid)) return halfIfDoubled(s.slice(0, mid));
+  }
+  return s;
+}
+// Return direct element children of el with given namespace URI + localName
+function directKids(el, ns, name) {
+  return Array.from(el.childNodes).filter(
+    n => n.nodeType === 1 && n.namespaceURI === ns && n.localName === name
+  );
+}
 function randomId(n=3) {
   const c='ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
   return Array.from({length:n},()=>c[Math.random()*c.length|0]).join('');
@@ -492,33 +510,62 @@ function* iterBlockItems(body) {
     else if (tag === 'tbl') {
       const rows = [];
       const seenImageRids = [];
+
+      // Walk ALL <w:tr> descendants (includes nested table rows so that
+      // "which row?" questions have their A/B/C/D option rows processed).
       for (const tr of child.getElementsByTagNameNS(W,'tr')) {
         const cells = [];
-        for (const tc of tr.getElementsByTagNameNS(W,'tc')) {
-          // Extract formatted text (sup/sub/bold/italic) from runs
-          const parts = [];
-          for (const run of tc.getElementsByTagNameNS(W,'r')) {
-            if (run.getElementsByTagNameNS(W,'del').length) continue;
-            let text = Array.from(run.getElementsByTagNameNS(W,'t'))
-                            .map(t => t.textContent).join('');
-            if (!text) continue;
-            const rPr = run.getElementsByTagNameNS(W,'rPr')[0];
-            if (rPr) {
-              const vAlign = rPr.getElementsByTagNameNS(W,'vertAlign')[0];
-              if (vAlign) {
-                const v = getWVal(vAlign);
-                if (v === 'superscript') text = `<sup>${text}</sup>`;
-                if (v === 'subscript')   text = `<sub>${text}</sub>`;
+
+        // Use DIRECT <w:tc> children of this row only.
+        // getElementsByTagNameNS would also return cells from any nested tables
+        // inside a cell, inflating rows[0] with nested-table content.
+        for (const tc of directKids(tr, W, 'tc')) {
+
+          // Extract text from DIRECT <w:p> children of the cell only
+          // (does not descend into nested <w:tbl> elements).
+          // Paragraphs are joined with a space so multi-line option cells like
+          // ['A', 'option text'] produce 'A option text' for OPT_CELL_RE.
+          const paraTexts = [];
+          const seenParas = new Set();   // cross-paragraph dedup (Word merged-cell artefact)
+          for (const para of directKids(tc, W, 'p')) {
+            const runParts = [];
+            for (const run of para.getElementsByTagNameNS(W,'r')) {
+              if (run.getElementsByTagNameNS(W,'del').length) continue;
+              let text = Array.from(run.getElementsByTagNameNS(W,'t'))
+                              .map(t => t.textContent).join('');
+              if (!text) continue;
+              const rPr = run.getElementsByTagNameNS(W,'rPr')[0];
+              if (rPr) {
+                const vAlign = rPr.getElementsByTagNameNS(W,'vertAlign')[0];
+                if (vAlign) {
+                  const v = getWVal(vAlign);
+                  if (v === 'superscript') text = `<sup>${text}</sup>`;
+                  if (v === 'subscript')   text = `<sub>${text}</sub>`;
+                }
+                const bEl = rPr.getElementsByTagNameNS(W,'b')[0];
+                const iEl = rPr.getElementsByTagNameNS(W,'i')[0];
+                if (bEl && getWVal(bEl) !== '0' && getWVal(bEl) !== 'false') text = `<strong>${text}</strong>`;
+                if (iEl && getWVal(iEl) !== '0' && getWVal(iEl) !== 'false') text = `<em>${text}</em>`;
               }
-              const bEl = rPr.getElementsByTagNameNS(W,'b')[0];
-              const iEl = rPr.getElementsByTagNameNS(W,'i')[0];
-              if (bEl && getWVal(bEl) !== '0' && getWVal(bEl) !== 'false') text = `<strong>${text}</strong>`;
-              if (iEl && getWVal(iEl) !== '0' && getWVal(iEl) !== 'false') text = `<em>${text}</em>`;
+              runParts.push(text);
             }
-            parts.push(text);
+            let paraText = mergeAdjacentTags(runParts.join('').trim());
+            // Detect doubling via HTML-stripped plain text so '<strong>XX</strong>'
+            // (from merged adjacent tags) is still caught.
+            const plainText = paraText.replace(/<[^>]+>/g, '');
+            const dedupedText = halfIfDoubled(plainText);
+            if (dedupedText !== plainText) paraText = dedupedText;  // use plain deduped
+            paraText = paraText.trim();
+            // Cross-paragraph dedup: skip repeated paragraphs (Word merged-cell artefact)
+            if (paraText && !seenParas.has(paraText)) {
+              seenParas.add(paraText);
+              paraTexts.push(paraText);
+            }
           }
-          cells.push(mergeAdjacentTags(parts.join('').trim()));
-          // Collect images inside this cell
+          cells.push(paraTexts.join(' '));
+
+          // Collect images from ALL descendants of this cell (images in nested
+          // option rows are also captured; seen_image_rids prevents duplicates).
           for (const blip of tc.getElementsByTagNameNS(A,'blip')) {
             const rId = getREmbed(blip);
             if (rId && !seenImageRids.includes(rId)) seenImageRids.push(rId);

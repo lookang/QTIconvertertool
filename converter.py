@@ -157,10 +157,43 @@ def convert_docx_to_qti(input_docx, job_dir, ms_answers=None):
             text = re.sub(f'</{tag}><{tag}>', '', text)
         return text
 
+    def halve_if_doubled(s):
+        """Recursively halve a string that is an exact repeat of itself.
+        Fixes Word XML duplicated diagram labels: 'cablecable'→'cable',
+        'tension in chain'×4 → 'tension in chain'×2 → 'tension in chain'."""
+        n = len(s)
+        if n >= 10 and n % 2 == 0:
+            mid = n >> 1
+            if s[:mid] == s[mid:]:
+                return halve_if_doubled(s[:mid])   # recurse for ×4, ×8 …
+        return s
+
     def extract_cell_text(cell):
-        """Extract formatted text (sup/sub/bold/italic) from a table cell element."""
-        raw = "".join(extract_run_text(r) for r in cell.xpath(".//w:r")).strip()
-        return merge_adjacent_tags(raw)
+        """Extract formatted text from DIRECT paragraphs of a table cell only.
+        • Does NOT descend into nested <w:tbl> elements.
+        • Paragraphs are joined with a space so multi-line option cells like
+          ['A', 'option text'] become 'A option text' for OPT_CELL_RE matching.
+        • Detects text doubling via the HTML-stripped plain text and replaces
+          with the deduplicated plain version.
+        • Deduplicates across paragraphs within the cell (removes cross-paragraph
+          repetition from Word merged-cell artefacts)."""
+        seen_paras = set()
+        paras = []
+        for para in cell.iterchildren(qn('w:p')):
+            runs  = "".join(extract_run_text(r) for r in para.xpath(".//w:r"))
+            runs  = merge_adjacent_tags(runs).strip()
+            # Check via HTML-stripped text so '<strong>X</strong><strong>X</strong>'
+            # → merged '<strong>XX</strong>' is still detected as doubled.
+            plain    = re.sub(r'<[^>]+>', '', runs)
+            deduped  = halve_if_doubled(plain)
+            if deduped != plain:
+                runs = deduped  # use plain deduplicated text (HTML stripped)
+            runs = runs.strip()
+            # Cross-paragraph dedup: skip paragraphs whose text we've already seen.
+            if runs and runs not in seen_paras:
+                seen_paras.add(runs)
+                paras.append(runs)
+        return " ".join(paras)
 
     def iter_block_items(doc):
         body = doc.element.body
@@ -193,11 +226,14 @@ def convert_docx_to_qti(input_docx, job_dir, ms_answers=None):
 
                     row_data = []
 
-                    for cell in row.xpath(".//w:tc"):
-                        # FIX: use formatted text (preserves <sup>/<sub>)
+                    for cell in row.iterchildren(qn('w:tc')):
+                        # Extract text from direct paragraphs only (no nested table content)
                         row_data.append(extract_cell_text(cell))
 
-                        # FIX: collect images from table cells
+                        # Collect images from ALL descendants of this cell
+                        # (includes images in nested tables — images from nested option rows
+                        #  are also picked up when we process those inner rows directly,
+                        #  but seen_image_rids prevents duplicates)
                         for node in cell.iter():
                             if node.tag.endswith('blip'):
                                 rId = node.get(qn('r:embed'))
