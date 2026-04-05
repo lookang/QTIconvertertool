@@ -92,6 +92,48 @@
     }
     #forceMcqLabel input[type=checkbox] { width: 16px; height: 16px; cursor: pointer; }
 
+    /* ── Blog post ───────────────────────────────────────────────────── */
+    .blog-post {
+      margin-top: 48px; padding-top: 36px;
+      border-top: 2px solid #e5e7eb;
+    }
+    .blog-post h2 {
+      font-size: 22px; margin: 0 0 4px;
+      color: #111827; line-height: 1.3;
+    }
+    .blog-meta {
+      font-size: 13px; color: #9ca3af; margin: 0 0 22px;
+    }
+    .blog-meta span { margin-right: 14px; }
+    .blog-post h3 {
+      font-size: 16px; color: #1e40af;
+      margin: 26px 0 8px;
+    }
+    .blog-post p {
+      font-size: 15px; color: #374151;
+      line-height: 1.75; margin: 0 0 14px;
+    }
+    .blog-post ul {
+      margin: 0 0 14px; padding-left: 22px;
+    }
+    .blog-post li {
+      font-size: 15px; color: #374151;
+      line-height: 1.75; margin-bottom: 6px;
+    }
+    .etm-pill {
+      display: inline-block; font-size: 11px; font-weight: 700;
+      padding: 2px 8px; border-radius: 20px;
+      background: #dbeafe; color: #1e40af;
+      margin-left: 6px; vertical-align: middle;
+      letter-spacing: .3px;
+    }
+    .blog-callout {
+      background: #f0f9ff; border-left: 4px solid #38bdf8;
+      border-radius: 0 8px 8px 0;
+      padding: 14px 18px; margin: 18px 0;
+      font-size: 15px; color: #0c4a6e; line-height: 1.7;
+    }
+
     /* ── Quick-load dev bar ──────────────────────────────────────────── */
     #quickLoad {
       margin-top: 18px; padding: 12px 14px;
@@ -449,6 +491,95 @@
       </li>
     </ul>
   </div>
+
+  <!-- ── Blog post ─────────────────────────────────────────────────────── -->
+  <div class="blog-post">
+    <h2>From Word Document to SLS in Minutes — Building a DOCX-to-QTI Converter for Singapore Teachers</h2>
+    <p class="blog-meta">
+      <span>📅 April 2026</span>
+      <span>✍️ Wee Loo Kang Lawrence &amp; Low Jun Hua</span>
+      <span>🏫 Singapore Physics Educators</span>
+    </p>
+
+    <h3>The Problem Every Teacher Knows</h3>
+    <p>
+      Every year, Singapore teachers invest enormous effort crafting high-quality examination papers in Microsoft Word — carefully worded MCQ stems, detailed mark schemes, physics diagrams painstakingly drawn or embedded. When it comes time to put these questions onto the national Student Learning Space (SLS) platform, teachers face a second, entirely manual job: re-typing every question, re-uploading every image, and re-entering every correct answer — one by one — into the SLS authoring interface.
+    </p>
+    <p>
+      For a 30-question Paper 1 alone, this can take two to three hours. Multiply that across a department sharing five or six papers per year, and a meaningful slice of teacher time disappears into administrative reformatting rather than pedagogy.
+    </p>
+
+    <div class="blog-callout">
+      "The goal of the EdTech Masterplan 2030 is to harness technology so that every teacher can teach better and every student can learn better — not so that teachers spend more time on administrative work."
+      <br><em>— ETM 2030 vision</em>
+    </div>
+
+    <h3>The Idea: Automate the Bridge Between Word and SLS</h3>
+    <p>
+      SLS supports the international <strong>QTI 2.1</strong> (Question &amp; Test Interoperability) standard for bulk question import. A QTI package is simply a ZIP file containing structured XML — a machine-readable description of every question, its options, its correct answer, and its associated images. If we could automatically translate a Word document into a valid QTI package, teachers could go from a finished exam paper to a fully loaded SLS quiz in minutes.
+    </p>
+    <p>
+      Low Jun Hua built the first Python prototype as a Flask web app. The approach: unzip the <code>.docx</code> file (Word documents are ZIP archives internally), parse the XML, detect question numbers, classify MCQ versus structured responses, extract embedded images, and write out conformant QTI XML. The converter was then extended, hardened, and re-implemented as a <strong>fully in-browser tool</strong> — no server, no sign-in, no file upload to a third party. Everything runs locally in the teacher's own browser using JavaScript and the JSZip library.
+    </p>
+
+    <h3>What the Converter Does</h3>
+    <ul>
+      <li><strong>Parses the Word XML</strong> to detect question numbers, stems, MCQ options (A/B/C/D), images (DrawingML and legacy VML), and tables.</li>
+      <li><strong>Reads the mark scheme</strong> automatically — upload the matching MS <code>.docx</code> and correct answers are injected into every QTI item's <code>correctResponse</code> field.</li>
+      <li><strong>Handles tricky layouts</strong> — nested tables, transposed option grids (A/B/C/D as column headers), image-only options, and physics diagrams embedded as option choices inside <code>&lt;simpleChoice&gt;</code> elements.</li>
+      <li><strong>Sorts questions correctly</strong> — SLS uses file position as the question number, so the converter deduplicates and sorts Q001→Q030 before writing <code>assessment_test.xml</code>.</li>
+      <li><strong>Provides a Review &amp; Edit step</strong> — after parsing, every question appears as an editable card in the browser. Teachers can toggle MCQ/Essay, fix stem text, change the correct answer, and review images before exporting.</li>
+      <li><strong>Exports a ready-to-import ZIP</strong> that can be uploaded directly to SLS without any further editing.</li>
+    </ul>
+
+    <h3>Alignment to the EdTech Masterplan 2030</h3>
+    <p>
+      Singapore's <strong>EdTech Masterplan 2030 (ETM 2030)</strong> sets out three strategic directions: empowering students as self-directed and collaborative learners, enabling teachers to teach better with technology, and building a future-ready education system. This tool directly supports the second direction in several ways:
+    </p>
+    <ul>
+      <li>
+        <strong>Reducing administrative burden</strong> <span class="etm-pill">ETM 2030</span> —
+        Teachers spend less time on manual data entry and more time on designing rich learning experiences and giving feedback to students.
+      </li>
+      <li>
+        <strong>Enabling formative assessment at scale</strong> <span class="etm-pill">ETM 2030</span> —
+        With existing paper-based tests instantly available on SLS, teachers can assign them as digital formative tasks, collect real-time class-level data, and act on it quickly.
+      </li>
+      <li>
+        <strong>Preserving and sharing quality content</strong> <span class="etm-pill">ETM 2030</span> —
+        Years of carefully crafted prelim papers — with their diagrams, worked answers, and mark schemes — can be brought into SLS and shared across departments and schools, compounding their value rather than leaving them in departmental file servers.
+      </li>
+      <li>
+        <strong>Teacher professional empowerment</strong> <span class="etm-pill">ETM 2030</span> —
+        Teachers who understand how their questions are structured digitally are better placed to design SLS quizzes from scratch, appreciate the role of metadata like <code>correctResponse</code>, and collaborate on shared question banks.
+      </li>
+      <li>
+        <strong>Supporting WOG digital infrastructure</strong> <span class="etm-pill">ETM 2030</span> —
+        The tool is hosted on the official <code>moe.edu.sg</code> domain so it is accessible from Whole-of-Government (WOG) devices without any installation or special permissions.
+      </li>
+    </ul>
+
+    <h3>Lessons Learned Building It</h3>
+    <p>
+      Word documents are far messier than they appear. The same visual layout — a question number followed by four labelled options — can be represented in dozens of different XML structures depending on the Word version, the template used, and the author's habits. Some papers put every question in a table; others mix paragraphs and tables; some use A. B. C. D. as paragraph text, others embed them in nested table cells, others use a transposed grid where A/B/C/D are column headers and the options are images in the rows below.
+    </p>
+    <p>
+      The most important engineering decision was to <strong>never throw away ambiguous content</strong>. Instead of silently dropping unknown structures, the converter surfaces them in the Review &amp; Edit panel so the teacher can make the final call. A question that cannot be auto-classified as MCQ shows up as Essay — one click on the badge toggles it to MCQ and reveals the option fields.
+    </p>
+    <p>
+      Running entirely in the browser was a deliberate choice for privacy and accessibility. Teachers' exam papers — often confidential before sitting — never leave their device. There is no account, no quota, no subscription. The tool works offline once the page is loaded.
+    </p>
+
+    <h3>What's Next</h3>
+    <p>
+      The current tool handles Physics prelim papers well. Future directions include better support for mathematical notation (MathML inside QTI), multi-part structured questions with sub-question scoring, and a question-bank view that lets teachers search and reuse individual items across papers. Contributions and feedback from the Singapore teacher community are very welcome via the <a href="https://github.com/lookang/QTIconvertertool" target="_blank" rel="noopener noreferrer">GitHub repository</a>.
+    </p>
+
+    <p style="font-size:13px;color:#9ca3af;margin-top:28px;padding-top:16px;border-top:1px solid #f3f4f6;">
+      This tool is free and open-source. It was built by Singapore physics educators, for Singapore educators. If it saves your department even one afternoon a year, it has done its job.
+    </p>
+  </div>
+
 </div>
 
 <!-- Zoom modal -->
