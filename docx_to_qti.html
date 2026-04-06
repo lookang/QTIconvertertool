@@ -1875,11 +1875,26 @@ function readEditorState() {
 document.getElementById('exportBtn').addEventListener('click', async () => {
   if (!editorState) return;
   const btn = document.getElementById('exportBtn');
+
+  // ── Guard: every MCQ question must have a correct answer selected ──────
+  const edited = readEditorState();
+  const missing = edited.filter(e => e.isMcq && !e.answer);
+  if (missing.length) {
+    const qNums = missing.map(e => `Q${e.q.qnum}`).join(', ');
+    showMsg('error',
+      `⚠ Please select the correct answer for ${missing.length === 1 ? 'question' : 'questions'}: `
+      + `<strong>${qNums}</strong> before exporting. `
+      + `(Look for the <span style="color:#d97706">amber-bordered</span> cards above.)`);
+    // Scroll to the first card that has no answer
+    const firstCard = document.querySelector('#questionCards .q-card.no-answer');
+    if (firstCard) firstCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    return;   // do NOT proceed with export
+  }
+
   btn.disabled = true;
   btn.textContent = '⏳ Building ZIP…';
   try {
-    const edited = readEditorState();
-    const blob   = await buildQtiZipBlob(edited, editorState.resolvedImages);
+    const blob = await buildQtiZipBlob(edited, editorState.resolvedImages);
     triggerDownload(blob, editorState.baseName + '.zip');
     btn.textContent = '✅ Downloaded!';
     setTimeout(() => { btn.textContent = '📦 Export QTI ZIP'; btn.disabled = false; }, 2500);
