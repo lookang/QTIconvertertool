@@ -1179,7 +1179,12 @@ async function parseDocxToQuestions(file, msAnswers) {
   }
 
   // ── Regex patterns ──────────────────────────────────────────────────
-  const Q_RE        = /^(\d+)\s+([\s\S]+)/;
+  // Matches question-start lines in multiple common formats:
+  //   "1 text"   "1. text"   "1) text"   "(1) text"
+  // Requires at least one whitespace after the delimiter to avoid matching
+  // decimal numbers like "1.2" or sub-question labels like "1(a)".
+  const Q_RE        = /^(?:\((\d+)\)|(\d+)(?:[.)]\s+|\s+))([\s\S]+)/;
+  // Options: A. / A) / a. / a) — case-insensitive, in paragraphs
   const OPT_RE      = /^[A-D][\.\)]\s*(.*)/i;
   // Allow up to 5 uppercase-letter prefix (Word cross-ref codes like "XX23")
   const QNUM_ONLY   = /^[A-Z]{0,5}(\d{1,3})$/;   // table first-cell
@@ -1432,17 +1437,30 @@ async function parseDocxToQuestions(file, msAnswers) {
     if (!plain) continue;
 
     const qMatch = plain.match(Q_RE);
-    if (qMatch && parseInt(qMatch[1]) <= MAX_QNUM) {
-      flushQuestion();
-      curQ    = { qnum: qMatch[1], tokens: [] };
-      curOpts = [];
-      const bodyText = raw.replace(/^(?:<[^>]*>)*\d+(?:<\/[^>]*>)*\s*/,'').trim() || qMatch[2];
-      curQ.tokens.push({ type:'text', value: bodyText });
-      continue;
+    if (qMatch) {
+      // Group layout: paren-style "(1) text" → groups [1]=num, [3]=text
+      //               regular   "1. text"   → groups [2]=num, [3]=text
+      const qnum = qMatch[1] || qMatch[2];
+      const qtext = qMatch[3];
+      if (parseInt(qnum) <= MAX_QNUM) {
+        flushQuestion();
+        curQ    = { qnum, tokens: [] };
+        curOpts = []; curOptImages = [];
+        // Strip the leading "N." / "N)" / "(N)" from raw HTML, keep rest
+        const bodyText = raw.replace(/^(?:<[^>]*>)*(?:\(\d+\)|\d+[.)])(?:<\/[^>]*>)*\s*/,'').trim()
+                      || raw.replace(/^(?:<[^>]*>)*\d+(?:<\/[^>]*>)*\s+/,'').trim()
+                      || qtext;
+        curQ.tokens.push({ type:'text', value: bodyText });
+        continue;
+      }
     }
 
     const optMatch = plain.match(OPT_RE);
-    if (optMatch && curQ) { curOpts.push(optMatch[1]); continue; }
+    if (optMatch && curQ) {
+      curOpts.push(optMatch[1]);
+      curOptImages.push(null);   // no image for paragraph-based options
+      continue;
+    }
 
     if (curQ) curQ.tokens.push({ type:'text', value: raw });
   }
@@ -1453,7 +1471,7 @@ async function parseDocxToQuestions(file, msAnswers) {
 
   const totalQ = mcq.length + structured.length;
   if (totalQ === 0)
-    throw new Error('No questions found. Make sure each question starts with a number (e.g. "1 What is…").');
+    throw new Error('No questions found. Each question must start with a number in one of these formats: "1 What is…", "1. What is…", "1) What is…", or "(1) What is…".');
 
   // ── Merge, deduplicate, sort — MCQ wins over structured for same qnum ──
   const qByNum = new Map();
