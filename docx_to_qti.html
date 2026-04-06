@@ -1533,14 +1533,14 @@ async function parseDocxToQuestions(file, msAnswers) {
       const fmt    = (lvlMap && lvlMap.get(ilvl)) || '';
       const cKey   = `${numId}:${ilvl}`;
 
-      if (/^decimal/i.test(fmt)) {
-        // Auto-numbered question stem
+      if (/^decimal/i.test(fmt) && plain) {
+        // Auto-numbered question stem (only if there is actual text content)
         numCounter.set(cKey, (numCounter.get(cKey) || 0) + 1);
         const autoQnum = String(numCounter.get(cKey));
         flushQuestion();
         curQ    = { qnum: autoQnum, tokens: [] };
         curOpts = []; curOptImages = [];
-        if (plain) curQ.tokens.push({ type: 'text', value: raw });
+        curQ.tokens.push({ type: 'text', value: raw });
         continue;
       }
 
