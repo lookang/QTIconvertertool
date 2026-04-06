@@ -220,6 +220,11 @@
       border-color: #3b82f6;
       box-shadow: 0 0 0 3px rgba(59,130,246,.12), 0 2px 8px rgba(0,0,0,.06);
     }
+    /* Amber border when MCQ card has no correct answer selected */
+    .q-card.no-answer {
+      border-color: #f59e0b;
+      box-shadow: 0 0 0 3px rgba(245,158,11,.12), 0 1px 5px rgba(0,0,0,.05);
+    }
     .q-card-header { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
     .q-num-badge {
       background: #1e40af; color: #fff;
@@ -1815,11 +1820,13 @@ function buildCard(entry, imageUrls, idx) {
         `<option value="${l}" ${answer === l ? 'selected' : ''}>${l.toUpperCase()}</option>`
       ).join('');
 
-    // Highlight correct-option letter badge immediately and on change
+    // Highlight correct-option letter badge immediately and on change.
+    // Also toggle amber border on the card when no answer is selected.
     const syncLabels = () => {
       optsWrap.querySelectorAll('.opt-letter').forEach(lbl => {
         lbl.classList.toggle('is-correct', lbl.textContent.toLowerCase() === sel.value);
       });
+      card.classList.toggle('no-answer', !sel.value);
     };
     sel.addEventListener('change', syncLabels);
     syncLabels();
