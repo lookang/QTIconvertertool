@@ -1124,13 +1124,20 @@ const LETTERS = ['a','b','c','d','e','f'];
 function mcqItemXml(q, answerText) {
   const id  = `Q${pad3(q.qnum)}_${randomId()}`;
   const ttl = escXml(stripTags(q.tokens.find(t=>t.type==='text')?.value||'').slice(0,70));
+  // Only emit <correctResponse> when answerText is a valid simpleChoice identifier
+  // (a–f).  An empty string or "None" is not a valid QTI identifier and causes
+  // SLS to reject the entire ZIP with "Processing unsuccessful".
+  const validAns = LETTERS.includes((answerText || '').toLowerCase())
+    ? (answerText).toLowerCase() : null;
+  const correctEl = validAns
+    ? `  <correctResponse><value>${validAns}</value></correctResponse>\n`
+    : '';
   let xml = `<assessmentItem xmlns="${QTI_NS}" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
   adaptive="false" identifier="${id}" timeDependent="false"
   title="Q${pad3(q.qnum)} ${ttl}"
   xsi:schemaLocation="${QTI_XSD}">
 <responseDeclaration identifier="RESPONSE" cardinality="single" baseType="identifier">
-  <correctResponse><value>${escXml(answerText)}</value></correctResponse>
-</responseDeclaration>
+${correctEl}</responseDeclaration>
 <outcomeDeclaration baseType="float" cardinality="single" identifier="SCORE"/>
 <itemBody>
   <choiceInteraction responseIdentifier="RESPONSE" shuffle="true" maxChoices="1">
