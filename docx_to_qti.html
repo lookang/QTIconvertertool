@@ -1017,6 +1017,7 @@ function* iterBlockItems(body) {
       const rows = [];
       const rowImages  = [];   // rowImages[i]    = all rIds in row i
       const cellImages = [];   // cellImages[i][j] = rIds in cell (i,j)
+      const cellParas  = [];   // cellParas[i][j]  = individual paragraph texts (un-joined)
       const seenRids = new Set();
 
       // Walk ALL <w:tr> descendants (includes nested table rows so that
@@ -1025,6 +1026,7 @@ function* iterBlockItems(body) {
         const cells = [];
         const thisRowImgs = [];
         const thisRowCellImgs = [];   // per-cell images for this row
+        const thisRowCellParas = [];  // per-cell paragraph arrays (un-joined)
 
         // Use DIRECT <w:tc> children of this row only.
         // getElementsByTagNameNS would also return cells from any nested tables
@@ -1082,6 +1084,7 @@ function* iterBlockItems(body) {
             }
           }
           cells.push(paraTexts.join(' '));
+          thisRowCellParas.push([...paraTexts]);   // keep individual paragraphs for embedded-option detection
 
           // Collect images from this cell — DrawingML + VML — per-cell and per-row
           const thisCellImgs = [];
@@ -1098,8 +1101,9 @@ function* iterBlockItems(body) {
         rows.push(cells);
         rowImages.push(thisRowImgs);
         cellImages.push(thisRowCellImgs);
+        cellParas.push(thisRowCellParas);
       }
-      yield { type: 'table', value: rows, rowImages, cellImages };
+      yield { type: 'table', value: rows, rowImages, cellImages, cellParas };
       // Yield images from non-option rows as stem images after the table.
       // Option rows (first cell = single letter A-D) keep their images at option level.
       for (let ri = 0; ri < rows.length; ri++) {
@@ -1336,6 +1340,31 @@ async function parseDocxToQuestions(file, msAnswers) {
     return opts;
   }
 
+  // Check if individual paragraphs of a question cell contain embedded A/B/C/D options
+  // as separate paragraphs (common in H1/H2 papers where options follow the stem in
+  // the same table cell, each starting with the option letter).
+  // Returns [optA, optB, optC, optD] or null.
+  function extractEmbeddedOpts(paras) {
+    // Need at least 5 paragraphs: ≥1 stem + 4 options
+    if (!paras || paras.length < 5) return null;
+    // Collect non-empty paragraphs
+    const nonEmpty = paras.filter(p => stripTags(p).replace(/\xa0/g,' ').trim());
+    if (nonEmpty.length < 4) return null;
+    const last4 = nonEmpty.slice(-4);
+    const letters = ['a','b','c','d'];
+    const opts = last4.map((p, i) => {
+      const plain = stripTags(p).replace(/\xa0/g,' ').replace(/\s+/g,' ').trim();
+      if (!plain) return null;
+      // First character must match the expected option letter (case-insensitive)
+      if (plain[0].toLowerCase() !== letters[i]) return null;
+      // Strip the leading letter (and optional . ) separator + whitespace) from the HTML
+      const rest = p.replace(/^(?:<[^>]+>)*[A-D](?:<\/[^>]+>)*[\.\)]*\s*/i, '').trim();
+      return rest !== undefined ? rest : plain.slice(1).replace(/^[\.\)\s]+/, '').trim();
+    });
+    if (opts.every(opt => opt !== null)) return opts;
+    return null;
+  }
+
   // ── Detect transposed options: A B C D appear as column headers ─────
   // e.g. Row: ['', 'A', 'B', 'C', 'D'] or Row: ['A', 'B', 'C', 'D', ...]
   // Returns { headerRowIdx, optStartCol } or null.
@@ -1442,8 +1471,25 @@ async function parseDocxToQuestions(file, msAnswers) {
         curQ    = { qnum: detectedQnum, tokens: [] };
         curOpts = []; curOptImages = [];
 
-        const qText = dedupCells(rows[0].slice(1));
-        if (qText) curQ.tokens.push({ type:'text', value: qText });
+        // Check for embedded A/B/C/D options inside the question cell (single-row tables
+        // where each option is a separate paragraph starting with A/B/C/D).
+        // Must be done BEFORE joining cell paragraphs, using the raw cellParas data.
+        const qCellParas = item.cellParas && item.cellParas[0]
+          ? (item.cellParas[0][rows[0].length - 1] || item.cellParas[0][1] || [])
+          : [];
+        const embeddedOpts = rows.length === 1 ? extractEmbeddedOpts(qCellParas) : null;
+        if (embeddedOpts) {
+          // Build stem text from the paragraphs BEFORE the options
+          const nonEmpty = qCellParas.filter(p => stripTags(p).replace(/\xa0/g,' ').trim());
+          const stemParas = nonEmpty.slice(0, nonEmpty.length - 4);
+          const stemText  = stemParas.join(' ').trim();
+          if (stemText) curQ.tokens.push({ type:'text', value: stemText });
+          curOpts = embeddedOpts;
+          curOptImages = embeddedOpts.map(() => null);
+        } else {
+          const qText = dedupCells(rows[0].slice(1));
+          if (qText) curQ.tokens.push({ type:'text', value: qText });
+        }
 
         // Check for transposed A/B/C/D column-header format within this table
         const transpHdrQ = findTransposedOptions(rows.slice(1));
@@ -1492,8 +1538,26 @@ async function parseDocxToQuestions(file, msAnswers) {
               // No per-option images for this format (letter embedded in cell text)
               for (let k = 0; k < opts.length; k++) curOptImages.push(null);
             } else {
-              const extra = dedupCells(row);
-              if (extra) curQ.tokens.push({ type:'text', value: extra });
+              // Check for image-only options where each cell is just 'A','B','C','D'
+              // (e.g. Q5-style: ['','A','B','C','D'] with raster images per cell)
+              const optSlice   = row.slice(1).filter(c => c.replace(/<[^>]+>/g,'').trim());
+              const allLetters = optSlice.length >= 2 &&
+                optSlice.every(c => /^[A-D]$/i.test(c.replace(/<[^>]+>/g,'').trim()));
+              if (allLetters) {
+                // Each non-empty cell is an image-only option; look up image per cell column
+                for (let ci = 0; ci < row.length - 1; ci++) {
+                  const c = row[ci + 1];
+                  if (!c.replace(/<[^>]+>/g,'').trim()) continue;
+                  curOpts.push('');
+                  const cellRids = item.cellImages && item.cellImages[ri]
+                    ? (item.cellImages[ri][ci + 1] || []) : [];
+                  const optFn = cellRids.length ? await resolveImage(cellRids[0]) : null;
+                  curOptImages.push(optFn);
+                }
+              } else {
+                const extra = dedupCells(row);
+                if (extra) curQ.tokens.push({ type:'text', value: extra });
+              }
             }
           } else {
             const extra = dedupCells(row);
@@ -1523,6 +1587,31 @@ async function parseDocxToQuestions(file, msAnswers) {
               const optRids = item.rowImages ? (item.rowImages[ri] || []) : [];
               const optFn   = optRids.length ? await resolveImage(optRids[0]) : null;
               curOptImages.push(optFn);
+            } else if (!r0plain) {
+              const opts = extractOptsFromRow(row);
+              if (opts.length >= 2) {
+                curOpts.push(...opts);
+                for (let k = 0; k < opts.length; k++) curOptImages.push(null);
+              } else {
+                // Image-only option cells (single letters A/B/C/D with images)
+                const optSlice   = row.slice(1).filter(c => c.replace(/<[^>]+>/g,'').trim());
+                const allLetters = optSlice.length >= 2 &&
+                  optSlice.every(c => /^[A-D]$/i.test(c.replace(/<[^>]+>/g,'').trim()));
+                if (allLetters) {
+                  for (let ci = 0; ci < row.length - 1; ci++) {
+                    const c = row[ci + 1];
+                    if (!c.replace(/<[^>]+>/g,'').trim()) continue;
+                    curOpts.push('');
+                    const cellRids = item.cellImages && item.cellImages[ri]
+                      ? (item.cellImages[ri][ci + 1] || []) : [];
+                    const optFn = cellRids.length ? await resolveImage(cellRids[0]) : null;
+                    curOptImages.push(optFn);
+                  }
+                } else {
+                  const t = dedupCells(row);
+                  if (t) curQ.tokens.push({ type:'text', value: t });
+                }
+              }
             } else {
               const t = dedupCells(row);
               if (t) curQ.tokens.push({ type:'text', value: t });
