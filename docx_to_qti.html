@@ -296,6 +296,10 @@
       border: 1.5px solid #e5e7eb; border-radius: 7px;
       font-size: 14px; font-family: inherit; color: #1f2937;
       transition: border-color .15s;
+      /* contentEditable div needs these to match <input> appearance */
+      min-height: 34px; line-height: 1.5;
+      background: #fff; box-sizing: border-box; cursor: text;
+      white-space: pre-wrap; word-break: break-word;
     }
     .opt-input:focus { outline: none; border-color: #3b82f6; }
 
@@ -1795,10 +1799,12 @@ function buildCard(entry, imageUrls, idx) {
         wrap.appendChild(img);
       }
 
-      const inp = document.createElement('input');
-      inp.type = 'text';
+      // Use a contentEditable div so <sup>/<sub>/<strong>/<em> formatting
+      // in option text is preserved through the editor round-trip.
+      const inp = document.createElement('div');
+      inp.contentEditable = 'true';
       inp.className = 'opt-input';
-      inp.value = stripTags(opt);
+      inp.innerHTML = opt;          // render HTML formatting, not plain text
       inp.setAttribute('data-opt-idx', oi);
       inp.style.marginTop = optImgFn ? '4px' : '0';
       wrap.appendChild(inp);
@@ -1861,7 +1867,8 @@ function readEditorState() {
     if (isMcq) {
       newQ.options = q.options.map((opt, oi) => {
         const el = card.querySelector(`.opt-input[data-opt-idx="${oi}"]`);
-        return el ? el.value : opt;
+        // contentEditable div → read innerHTML to preserve <sup>/<sub> formatting
+        return el ? el.innerHTML : opt;
       });
       const sel = card.querySelector('.answer-select');
       if (sel) newAnswer = sel.value;
