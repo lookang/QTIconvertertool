@@ -960,7 +960,18 @@ function* iterBlockItems(body) {
 
       const parts = [];
 
+      // Skip runs that are inside <w:drawing> or <w:pict> (canvas/shape label text,
+      // not part of the readable paragraph flow).
+      const drawingRunSet = new Set();
+      for (const el of child.getElementsByTagNameNS(W,'drawing')) {
+        for (const r of el.getElementsByTagNameNS(W,'r')) drawingRunSet.add(r);
+      }
+      for (const el of child.getElementsByTagNameNS(W,'pict')) {
+        for (const r of el.getElementsByTagNameNS(W,'r')) drawingRunSet.add(r);
+      }
+
       for (const run of child.getElementsByTagNameNS(W,'r')) {
+        if (drawingRunSet.has(run)) continue;  // skip diagram/shape label text
         // Skip deleted-text runs
         if (run.getElementsByTagNameNS(W,'del').length) continue;
 
@@ -1028,7 +1039,16 @@ function* iterBlockItems(body) {
           const seenParas = new Set();   // cross-paragraph dedup (Word merged-cell artefact)
           for (const para of directKids(tc, W, 'p')) {
             const runParts = [];
+            // Skip runs inside <w:drawing>/<w:pict> (canvas/shape labels, not flow text)
+            const cellDrawingRunSet = new Set();
+            for (const el of para.getElementsByTagNameNS(W,'drawing')) {
+              for (const r of el.getElementsByTagNameNS(W,'r')) cellDrawingRunSet.add(r);
+            }
+            for (const el of para.getElementsByTagNameNS(W,'pict')) {
+              for (const r of el.getElementsByTagNameNS(W,'r')) cellDrawingRunSet.add(r);
+            }
             for (const run of para.getElementsByTagNameNS(W,'r')) {
+              if (cellDrawingRunSet.has(run)) continue;  // skip diagram/shape label text
               if (run.getElementsByTagNameNS(W,'del').length) continue;
               let text = Array.from(run.getElementsByTagNameNS(W,'t'))
                               .map(t => t.textContent).join('');
