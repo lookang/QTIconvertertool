@@ -399,12 +399,19 @@
     <div class="ql-status" id="qlStatus"></div>
   </details>
 
-  <!-- Force-MCQ toggle -->
-  <label id="forceMcqLabel">
-    <input type="checkbox" id="forceMcqCheck">
-    All questions are MCQ (Paper 1 / multiple-choice only)
-    <span class="ms-badge" style="background:#fef3c7;color:#92400e">forces MCQ</span>
-  </label>
+  <!-- Force-MCQ / Force-Essay toggles -->
+  <div style="display:flex;flex-wrap:wrap;gap:12px;margin-top:12px;">
+    <label id="forceMcqLabel">
+      <input type="checkbox" id="forceMcqCheck">
+      All MCQ (Paper 1 / multiple-choice only)
+      <span class="ms-badge" style="background:#fef3c7;color:#92400e">forces MCQ</span>
+    </label>
+    <label id="forceEssayLabel" style="display:flex;align-items:center;gap:8px;font-size:14px;color:#374151;cursor:pointer;user-select:none;">
+      <input type="checkbox" id="forceEssayCheck" style="width:16px;height:16px;cursor:pointer;">
+      All Essay / Structured (Paper 2/3/4)
+      <span class="ms-badge" style="background:#dbeafe;color:#1e40af">forces Essay</span>
+    </label>
+  </div>
 
   <button id="convertBtn" disabled>Convert Document</button>
   <div id="spinner">⏳ Converting… please wait</div>
@@ -700,8 +707,9 @@ document.querySelectorAll('.ql-btn').forEach(btn => {
         setMsFile(msFile);
       }
 
-      // Auto-tick Force MCQ for P1 papers
-      document.getElementById('forceMcqCheck').checked = isMcq;
+      // Auto-tick Force MCQ for P1 papers; auto-tick Force Essay for P2/P3/P4 papers
+      document.getElementById('forceMcqCheck').checked  = isMcq;
+      document.getElementById('forceEssayCheck').checked = !isMcq;
 
       qlStatus.textContent = `✅ Loaded: ${qpFile.name}${msPath ? ' + MS' : ''}`;
     } catch (e) {
@@ -709,6 +717,14 @@ document.querySelectorAll('.ql-btn').forEach(btn => {
       btn.classList.remove('ql-active');
     }
   });
+});
+
+// ── Force-MCQ / Force-Essay mutual exclusion ─────────────────────────────
+document.getElementById('forceMcqCheck').addEventListener('change', function() {
+  if (this.checked) document.getElementById('forceEssayCheck').checked = false;
+});
+document.getElementById('forceEssayCheck').addEventListener('change', function() {
+  if (this.checked) document.getElementById('forceMcqCheck').checked = false;
 });
 
 // ── Convert button ────────────────────────────────────────────────────────
@@ -725,8 +741,9 @@ convertBtn.addEventListener('click', async () => {
       catch (e) { console.warn('MS parse failed:', e); }
     }
 
-    const baseName  = selectedFile.name.replace(/\.docx$/i, '');
-    const forceMcq  = document.getElementById('forceMcqCheck').checked;
+    const baseName   = selectedFile.name.replace(/\.docx$/i, '');
+    const forceMcq   = document.getElementById('forceMcqCheck').checked;
+    const forceEssay = document.getElementById('forceEssayCheck').checked;
     const { allQuestions, resolvedImages } = await parseDocxToQuestions(selectedFile, msAnswers);
 
     // Force-MCQ: convert every Essay question to MCQ with empty options
@@ -742,10 +759,19 @@ convertBtn.addEventListener('click', async () => {
       }
     }
 
+    // Force-Essay: convert every MCQ question to Essay (strip options)
+    if (forceEssay) {
+      for (const entry of allQuestions) {
+        entry.isMcq = false;
+      }
+    }
+
     renderEditor(allQuestions, resolvedImages, baseName);
     const mcqCount   = allQuestions.filter(e => e.isMcq).length;
     const essayCount = allQuestions.length - mcqCount;
-    const typeNote   = forceMcq ? ' (all forced MCQ)' : ` — ${mcqCount} MCQ, ${essayCount} Essay`;
+    const typeNote   = forceMcq   ? ' (all forced MCQ)'
+                     : forceEssay ? ' (all forced Essay)'
+                     : ` — ${mcqCount} MCQ, ${essayCount} Essay`;
     showMsg('', `✅ Parsed ${allQuestions.length} questions${typeNote} — review &amp; edit below, then export`);
   } catch (err) {
     showMsg('error', '✗ ' + err.message);
@@ -1291,8 +1317,8 @@ async function parseDocxToQuestions(file, msAnswers) {
   // Requires at least one whitespace after the delimiter to avoid matching
   // decimal numbers like "1.2" or sub-question labels like "1(a)".
   const Q_RE        = /^(?:\((\d+)\)|(\d+)(?:[.)]\s+|\s+))([\s\S]+)/;
-  // Options: A. / A) / a. / a) — case-insensitive, in paragraphs
-  const OPT_RE      = /^[A-D][\.\)]\s*(.*)/i;
+  // Options: uppercase A./A) only — lowercase a)/b) are essay sub-questions, not MCQ options
+  const OPT_RE      = /^[A-D][\.\)]\s*(.*)/;
   // Allow up to 5 uppercase-letter prefix (Word cross-ref codes like "XX23")
   const QNUM_ONLY   = /^[A-Z]{0,5}(\d{1,3})$/;   // table first-cell
   const OPT_CELL_RE = /^([A-D])\s+(.*)/i;  // 'A   text' in a table options row
