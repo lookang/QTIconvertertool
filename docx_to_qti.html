@@ -444,15 +444,24 @@
       <li>Click <b>Convert Document</b>.</li>
     </ul>
 
-    <h3 style="margin:18px 0 6px;font-size:16px;color:#1e40af;">Step 2 — Review &amp; Edit</h3>
+    <h3 style="margin:18px 0 6px;font-size:16px;color:#1e40af;">Step 2 — Review &amp; Edit <span style="font-weight:400;font-size:13px;color:#6b7280">(optional for Essay papers)</span></h3>
     <ul>
       <li>Every detected question appears as a card showing its stem, options, and correct answer.</li>
       <li><b>Click the MCQ / Essay badge</b> on any card to toggle the question type if it was mis-detected.</li>
       <li><b>Click any stem text</b> to edit it directly — changes are live.</li>
       <li><b>Edit option text</b> in the A / B / C / D fields as needed.</li>
-      <li>Use the <b>correct-answer dropdown</b> to set or change which option is correct — the letter turns green instantly.</li>
+      <li>For <b>MCQ</b>: use the <b>correct-answer dropdown</b> to set the right option — the letter turns green. Export is blocked until all MCQ answers are set.</li>
+      <li>For <b>Essay / Structured</b> papers: correct answers are <em>optional</em> — you can export immediately without filling them in.</li>
       <li>Images are displayed as-is and cannot be edited here; fix them in Word before converting.</li>
     </ul>
+    <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:12px 16px;margin-top:10px;font-size:13px;color:#166534;">
+      <strong>💡 AI tip — auto-inject model answers for Essay papers:</strong><br>
+      You can use <a href="https://claude.ai/download" target="_blank" rel="noopener" style="color:#15803d;font-weight:600;">Claude Code</a> (Anthropic's AI coding environment) or the
+      <a href="https://www.anthropic.com/api" target="_blank" rel="noopener" style="color:#15803d;font-weight:600;">Anthropic API</a> to write a script that reads your exported QTI XML,
+      sends each question stem to Claude, and injects the model answer into the <code>&lt;correctResponse&gt;</code> field automatically.
+      Download Claude Code at <a href="https://claude.ai/download" target="_blank" rel="noopener" style="color:#15803d;">claude.ai/download</a> ·
+      API docs at <a href="https://docs.anthropic.com" target="_blank" rel="noopener" style="color:#15803d;">docs.anthropic.com</a>.
+    </div>
 
     <h3 style="margin:18px 0 6px;font-size:16px;color:#1e40af;">Step 3 — Export</h3>
     <ul>
