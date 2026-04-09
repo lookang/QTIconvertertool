@@ -1247,18 +1247,24 @@ ${correctEl}</responseDeclaration>
 
 function essayItemXml(q, answerText) {
   const id = `Q${pad3(q.qnum)}_${randomId()}`;
+  // <correctResponse> must be a child of <responseDeclaration>, not a sibling.
+  // Only emit it when there is a real answer (not the placeholder "None").
+  const hasAnswer = answerText && answerText.trim() && answerText !== 'None';
+  const correctEl = hasAnswer
+    ? `\n  <correctResponse><value>${escXml(answerText)}</value></correctResponse>`
+    : '';
   const xml = `<assessmentItem xmlns="${QTI_NS}" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
   adaptive="false" identifier="${id}" timeDependent="false" title="Q${pad3(q.qnum)}"
   xsi:schemaLocation="${QTI_XSD}">
-<responseDeclaration identifier="RESPONSE" cardinality="single" baseType="string"/>
-<correctResponse><value>${escXml(answerText)}</value></correctResponse>
+<responseDeclaration identifier="RESPONSE" cardinality="single" baseType="string">${correctEl}
+</responseDeclaration>
 <outcomeDeclaration baseType="float" cardinality="single" identifier="SCORE"/>
 <itemBody>
   <prompt>\n${tokensToHtml(q.tokens)}</prompt>
   <extendedTextInteraction responseIdentifier="RESPONSE" expectedLength="400"/>
 </itemBody>
-<responseProcessing template="http://www.imsglobal.org/question/qti_v2p1/rptemplates/match_correct"/>
 </assessmentItem>`;
+  // Note: no <responseProcessing> for essays — they require human grading.
   return { id, xml };
 }
 
