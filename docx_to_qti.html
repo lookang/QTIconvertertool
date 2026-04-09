@@ -454,13 +454,23 @@
       <li>For <b>Essay / Structured</b> papers: correct answers are <em>optional</em> — you can export immediately without filling them in.</li>
       <li>Images are displayed as-is and cannot be edited here; fix them in Word before converting.</li>
     </ul>
-    <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:12px 16px;margin-top:10px;font-size:13px;color:#166534;">
-      <strong>💡 AI tip — auto-inject model answers for Essay papers:</strong><br>
-      You can use <a href="https://claude.ai/download" target="_blank" rel="noopener" style="color:#15803d;font-weight:600;">Claude Code</a> (Anthropic's AI coding environment) or the
-      <a href="https://www.anthropic.com/api" target="_blank" rel="noopener" style="color:#15803d;font-weight:600;">Anthropic API</a> to write a script that reads your exported QTI XML,
-      sends each question stem to Claude, and injects the model answer into the <code>&lt;correctResponse&gt;</code> field automatically.
-      Download Claude Code at <a href="https://claude.ai/download" target="_blank" rel="noopener" style="color:#15803d;">claude.ai/download</a> ·
-      API docs at <a href="https://docs.anthropic.com" target="_blank" rel="noopener" style="color:#15803d;">docs.anthropic.com</a>.
+    <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:12px 16px;margin-top:10px;font-size:13px;color:#166534;line-height:1.6;">
+      <strong>💡 Free AI workflow — auto-inject model answers using Claude Code:</strong><br>
+      No API key or per-call cost needed. <a href="https://claude.ai/download" target="_blank" rel="noopener" style="color:#15803d;font-weight:600;">Claude Code</a> is Anthropic's AI coding
+      assistant that runs locally on your machine and is included with a Claude subscription.<br><br>
+      <strong>Workflow:</strong>
+      <ol style="margin:6px 0 6px 18px;padding:0;">
+        <li>Export your QTI ZIP from Step 3 and save it in the same folder as this converter.</li>
+        <li>Open that folder in Claude Code (<a href="https://claude.ai/download" target="_blank" rel="noopener" style="color:#15803d;">download here</a>).</li>
+        <li>Type a prompt such as:<br>
+          <code style="display:block;background:#dcfce7;border-radius:4px;padding:6px 10px;margin:4px 0;font-size:12px;color:#14532d;">
+            "Read the QTI ZIP in this folder, generate a concise model answer for each essay question stem,
+            and save an updated ZIP with the answers injected into the &lt;correctResponse&gt; fields."
+          </code>
+        </li>
+        <li>Claude Code reads the ZIP, writes the model answers, and saves the updated ZIP — ready to import into SLS.</li>
+      </ol>
+      This works entirely offline within your subscription — no extra billing, no API key setup.
     </div>
 
     <h3 style="margin:18px 0 6px;font-size:16px;color:#1e40af;">Step 3 — Export</h3>
@@ -2075,5 +2085,8 @@ document.getElementById('resetBtn').addEventListener('click', () => {
   window.scrollTo({ top: 0, behavior: 'smooth' });
 });
 </script>
+<footer style="text-align:center; padding: 16px 0 10px; color: #999; font-size: 0.78rem; font-family: sans-serif;">
+  Last updated: Thursday, 9 April 2026, 8:23 AM
+</footer>
 </body>
 </html>
