@@ -4,12 +4,19 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>DOCX → QTI Converter</title>
+  <!-- Google Fonts: Noto Sans SC (Chinese) + Noto Sans Tamil for multilingual rendering -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;700&family=Noto+Sans+Tamil:wght@400;700&display=swap" rel="stylesheet">
   <!-- JSZip: reads .docx (which is a ZIP) and writes the output ZIP — no server needed -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 
   <style>
     body {
-      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto,
+                   "Noto Sans SC", "PingFang SC", "Microsoft YaHei", "SimHei",
+                   "Noto Sans Tamil", "Latha", "Tamil Sangam MN",
+                   Arial, sans-serif;
       background: #fff;
       margin: 0;
       padding: 0;
@@ -317,6 +324,25 @@
     }
     .answer-select:focus { outline: none; border-color: #3b82f6; }
 
+    /* Essay suggested-answer area */
+    .q-essay-answer-label {
+      font-size: 11px; font-weight: 700; color: #9ca3af;
+      text-transform: uppercase; letter-spacing: .6px;
+      margin: 14px 0 6px 2px;
+      padding-top: 11px;
+      border-top: 1px dashed #e5e7eb;
+    }
+    .essay-answer-input {
+      width: 100%; box-sizing: border-box;
+      padding: 9px 12px;
+      border: 1.5px solid #e5e7eb; border-radius: 7px;
+      font-size: 13px; font-family: inherit; color: #1f2937;
+      line-height: 1.6; resize: vertical; min-height: 90px;
+      background: #fff; transition: border-color .15s;
+    }
+    .essay-answer-input:focus { outline: none; border-color: #3b82f6; }
+    .essay-answer-input::placeholder { color: #9ca3af; }
+
     /* Sticky export bar */
     .editor-action-bar {
       position: sticky; bottom: 0; z-index: 10;
@@ -343,8 +369,25 @@
 <body>
 
 <div class="container">
-  <h1>DOCX → QTI Converter</h1>
-  <div class="subtitle">Upload a formatted Word document and get a ready‑to‑import QTI 2.1 package<br>
+  <h1>DOCX → QTI Converter
+    <a href="https://www.youtube.com/watch?v=0KFOVRdJfX0" target="_blank" rel="noopener"
+       title="Watch tutorial on YouTube"
+       style="display:inline-flex;align-items:center;gap:6px;margin-left:12px;
+              vertical-align:middle;text-decoration:none;
+              background:#ff0000;color:#fff;
+              font-size:13px;font-weight:600;letter-spacing:.3px;
+              padding:5px 11px 5px 8px;border-radius:6px;
+              box-shadow:0 1px 4px rgba(0,0,0,.25);
+              transition:background .15s,transform .1s;"
+       onmouseover="this.style.background='#cc0000';this.style.transform='translateY(-1px)'"
+       onmouseout="this.style.background='#ff0000';this.style.transform='translateY(0)'">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="white" xmlns="http://www.w3.org/2000/svg">
+        <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+      </svg>
+      How to use
+    </a>
+  </h1>
+  <div class="subtitle">Upload a formatted Word document and get a ready‑to‑import QTI 2.1 package — supports English, Chinese &amp; Tamil fonts<br>
     <small style="color:#888">Runs entirely in your browser — no server, no uploads</small>
   </div>
 
@@ -428,6 +471,10 @@
     </div>
     <div id="questionCards"></div>
     <div class="editor-action-bar">
+      <label id="setAllALabel" title="Set every MCQ question with no answer selected to A" style="display:inline-flex;align-items:center;gap:6px;padding:6px 12px;background:#f0f9ff;border:1.5px solid #bae6fd;border-radius:8px;cursor:pointer;font-size:13.5px;color:#0369a1;user-select:none;">
+        <input type="checkbox" id="setAllAChk" style="width:15px;height:15px;cursor:pointer;accent-color:#0ea5e9;">
+        Set unanswered MCQ → A
+      </label>
       <button class="btn-export" id="exportBtn">📦 Export QTI ZIP</button>
       <button class="btn-reset"  id="resetBtn">↩ New File</button>
     </div>
@@ -443,6 +490,10 @@
       <li>For <b>Paper 1 (all MCQ)</b> papers, tick <em>All questions are MCQ</em> before converting.</li>
       <li>Click <b>Convert Document</b>.</li>
     </ul>
+    <p style="margin:8px 0 0;padding:8px 12px;background:#fef9c3;border-left:4px solid #ca8a04;border-radius:4px;font-size:13.5px;color:#713f12;">
+      <b>Tip:</b> If your document mixes questions <em>and</em> answers in the same file, the QTI zip may fail to import into SLS or produce unexpected items.
+      For best results, upload the <b>question paper only</b> and supply a <b>separate mark scheme .docx</b> as the second file.
+    </p>
 
     <h3 style="margin:18px 0 6px;font-size:16px;color:#1e40af;">Step 2 — Review &amp; Edit <span style="font-weight:400;font-size:13px;color:#6b7280">(optional for Essay papers)</span></h3>
     <ul>
@@ -502,7 +553,16 @@
     </ul>
     <p style="color:#555;font-size:13px;margin-top:12px;margin-bottom:6px"><strong>Singapore Biology prelim papers (with AI-generated model answers):</strong></p>
     <ul>
-      <li><a href="samples/AMKSS_2025 Prelim P4 Biology Qns with Answers.zip" download>AMKSS 2025 Prelim P4 Biology Qns with Answers.zip</a> — structured/essay paper with model answers injected via Claude Code</li>
+      <li><a href="samples/AMKSS_2025 Prelim P4 Biology Qns with Answers.zip" download>AMKSS 2025 Prelim P4 Biology Qns with Answers.zip</a> — structured/essay paper with model answers injected via Claude Code
+        <br><span style="color:#b45309;font-size:11.5px;display:inline-flex;align-items:center;gap:4px;margin-top:3px;">
+          <svg width="13" height="13" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/></svg>
+          SLS does not yet support suggested answers for essay/structured questions via QTI import — the answers are embedded in the file but will not appear in SLS until MOE adds this feature.
+        </span>
+      </li>
+    </ul>
+    <p style="color:#555;font-size:13px;margin-top:12px;margin-bottom:6px"><strong>Singapore Chinese (华文) MCQ worksheets — contributed by Alena:</strong></p>
+    <ul>
+      <li><a href="samples/补充作业6 2026.zip" download>补充作业6 2026.zip</a> — Chinese-language MCQ worksheet (Q1–Q15) with ⑴⑵⑶⑷-style options</li>
     </ul>
     <p style="color:#555;font-size:13px;margin-top:12px;margin-bottom:6px"><strong>Simple test samples (demonstrating different DOCX formats):</strong></p>
     <ul>
@@ -548,6 +608,19 @@
            target="_blank" rel="noopener noreferrer">
           Live Demo — Flask server version (by Low Jun Hua, hosted on Render)
         </a>
+      </li>
+      <li>
+        <a href="https://vle.learning.moe.edu.sg/search?keyword=%22SBA%22&amp;location=COMMUNITY&amp;resource=LESSON&amp;subject=&amp;level="
+           target="_blank" rel="noopener noreferrer">
+          SLS Community Gallery — browse "SBA" lesson packages shared by teachers
+        </a>
+        <span style="display:inline-block;font-size:11px;font-weight:600;padding:1px 6px;border-radius:4px;background:#dbeafe;color:#1e40af;margin-left:5px;vertical-align:middle;">Teacher login required</span>
+        <br>
+        <span style="font-size:12px;color:#6b7280;line-height:1.6;">
+          Requires a teacher account to log in to SLS and browse the Community Gallery.
+          Currently returns <strong>~1,520 resources</strong> — use the Subject and Level filters
+          on the left panel to narrow down to your targeted modules.
+        </span>
       </li>
     </ul>
   </div>
@@ -660,6 +733,10 @@ const msFileNameEl = document.getElementById('msFileName');
 const convertBtn  = document.getElementById('convertBtn');
 const spinner     = document.getElementById('spinner');
 const messageEl   = document.getElementById('message');
+
+// ── Prevent browser from navigating/downloading when file is dropped outside a zone ──
+document.addEventListener('dragover', e => e.preventDefault());
+document.addEventListener('drop',     e => e.preventDefault());
 
 // ── Question paper zone ───────────────────────────────────────────────────
 dropZone.addEventListener('click', () => fileInput.click());
@@ -934,56 +1011,94 @@ async function parseMarkScheme(msFile) {
   const docStr = await zip.file('word/document.xml').async('string');
   const xmlDoc = parser.parseFromString(docStr, 'application/xml');
 
-  const tables = extractTables(xmlDoc);
-  if (tables.length === 0) return {};
-
-  const first = tables[0];
-  const nRows = first.length;
-  const nCols = first[0] ? first[0].length : 0;
-
-  // ── MCQ grid: ≥6 rows × ≥10 cols, first cell is a digit ──────────────
-  if (nRows >= 6 && nCols >= 10 && /^\d+$/.test((first[0][0] || '').trim())) {
-    return parseMcqGrid(first);
-  }
-
-  // ── Structured MS ────────────────────────────────────────────────────
-  return parseStructuredMs(tables);
-}
-
-function parseMcqGrid(gridTable) {
-  // Alternating rows: [q-numbers…], [answer-letters…], [q-numbers…], …
   const answers = {};
-  for (let i = 0; i < gridTable.length - 1; i += 2) {
-    const numsRow = gridTable[i];
-    const ansRow  = gridTable[i + 1];
-    for (let j = 0; j < numsRow.length; j++) {
-      const qn  = (numsRow[j] || '').trim();
-      const ans = (ansRow[j]  || '').trim().toUpperCase();
-      if (/^\d+$/.test(qn) && /^[ABCD]$/.test(ans)) {
-        answers[qn] = ans.toLowerCase();
+
+  // 1. Scan for answers in tables (MCQ grids & structured)
+  const tables = extractTables(xmlDoc);
+  for (const table of tables) {
+    for (let r = 0; r < table.length; r++) {
+      for (let c = 0; c < table[r].length; c++) {
+        const cell = (table[r][c] || '').trim().toUpperCase();
+        // Match Q-number (e.g. "1", "01", "Q1", "Q01")
+        const mQ = cell.match(/^[Q]?0*(\d+)$/);
+        if (mQ) {
+          const qnStr = mQ[1];
+          let foundAns = false;
+
+          // Check right cell (column-style)
+          if (c + 1 < table[r].length) {
+            const right = (table[r][c+1] || '').trim().toUpperCase();
+            if (/^[ABCD]$/.test(right)) { answers[qnStr] = right.toLowerCase(); foundAns = true; }
+            else if (/^[1234]$/.test(right)) { answers[qnStr] = String.fromCharCode(96 + parseInt(right)); foundAns = true; }
+            else if (right.length > 0) {
+              // Could be structured answer test (e.g. "Q34" -> "This is the answer")
+              if (answers[qnStr] && answers[qnStr].length > 1) answers[qnStr] += '\n' + right;
+              else answers[qnStr] = right;
+              foundAns = true;
+            }
+          }
+
+          // Check bottom cell (row-style) 
+          // Only check bottom if we didn't find a clean right answer, or if we want to catch alternating rows
+          if (!foundAns && r + 1 < table.length) {
+            const bottom = (table[r+1][c] || '').trim().toUpperCase();
+            if (/^[ABCD]$/.test(bottom)) { answers[qnStr] = bottom.toLowerCase(); foundAns = true; }
+            else if (/^[1234]$/.test(bottom)) { answers[qnStr] = String.fromCharCode(96 + parseInt(bottom)); foundAns = true; }
+          }
+        } else {
+          // Check for structured like "Q34: answer" inside a single cell
+          const structMatch = cell.match(/^[Q]?0*(\d+)[.:：]\s*(.*)/i);
+          if (structMatch) {
+            const qnStr = structMatch[1];
+            const text = structMatch[2].trim();
+            if (text) answers[qnStr] = text;
+          }
+        }
       }
     }
   }
-  return answers;
-}
 
-function parseStructuredMs(tables) {
-  // Rows: [part_label, answer_text, marks…]
-  // e.g. ['1a', 'rate of change…', 'B1']
-  const answers = {};
-  for (const table of tables) {
-    for (const row of table) {
-      if (row.length < 2) continue;
-      const label = (row[0] || '').trim();
-      const text  = (row[1] || '').trim();
-      if (!label || !text) continue;
-      const m = label.match(/^(\d+)/);
-      if (!m) continue;
-      const qnum  = m[1];
-      const entry = `${label}: ${text}`;
-      answers[qnum] = answers[qnum] ? answers[qnum] + '\n' + entry : entry;
+  // 2. Scan for answers in paragraphs (Essay style)
+  let currentQnum = null;
+  const paras = Array.from(xmlDoc.getElementsByTagNameNS(W, 'p'));
+  for (const p of paras) {
+    const pt = Array.from(p.getElementsByTagNameNS(W, 't')).map(t => t.textContent).join('').trim();
+    if (!pt) continue;
+
+    // Matches Q34. Q34: Q34  or  34. 34: (Requires punctuation if no Q is present)
+    let qnum = null;
+    let ansText = "";
+    const m1 = pt.match(/^[Qq]0*(\d+)[.:：\s]*(.*)/);
+    const m2 = pt.match(/^0*(\d+)[.:：]+\s*(.*)/);
+    if (m1) { qnum = m1[1]; ansText = m1[2].trim(); }
+    else if (m2) { qnum = m2[1]; ansText = m2[2].trim(); }
+
+    if (qnum) {
+      let isMcq = false;
+      const cleanAns = ansText.toUpperCase().replace(/\./g, '').trim();
+      if (/^[ABCD]$/.test(cleanAns)) { ansText = cleanAns.toLowerCase(); isMcq = true; }
+      else if (/^[1234]$/.test(cleanAns)) { ansText = String.fromCharCode(96 + parseInt(cleanAns)); isMcq = true; }
+      
+      // Protect existing single-letter MCQ answers from being overwritten by false paragraph hits
+      if (answers[qnum] && /^[a-d]$/.test(answers[qnum])) {
+         if (isMcq) answers[qnum] = ansText;
+         currentQnum = null;
+         continue;
+      }
+      
+      if (answers[qnum] && answers[qnum].length > 1 && !isMcq && answers[qnum] !== ansText) {
+        if (!answers[qnum].includes(ansText)) answers[qnum] += '\n' + pt;
+      } else {
+        answers[qnum] = ansText || pt;
+      }
+      currentQnum = isMcq ? null : qnum;
+    } else {
+      if (currentQnum && answers[currentQnum]) {
+        answers[currentQnum] += '\n' + pt;
+      }
     }
   }
+
   return answers;
 }
 
@@ -1028,6 +1143,17 @@ function* iterBlockItems(body) {
         for (const r of el.getElementsByTagNameNS(W,'r')) drawingRunSet.add(r);
       }
 
+      // Dictionary to map legacy Singapore HYPY font ASCII keys to Unicode Pinyin
+      const hypyMap = {
+        'C': 'ǎ', 'H': 'ǐ', 'K': 'ē', 'N': 'è', 'P': 'ē', 'Q': 'ó', 'S': 'è',
+        'A': 'ā', 'B': 'á', 'D': 'à', 'E': 'ō', 'F': 'ó', 'G': 'ǒ',
+        'I': 'ī', 'J': 'í', 'L': 'ì', 'M': 'ū', 'O': 'ǔ', 'R': 'ú', 'T': 'ù',
+        'U': 'ǖ', 'V': 'ǘ', 'W': 'ǚ', 'X': 'ǜ', 'Y': 'ě', 'Z': 'ě'
+      };
+      function translateHypy(text) {
+        return text.split('').map(c => hypyMap[c] || c).join('');
+      }
+
       for (const run of child.getElementsByTagNameNS(W,'r')) {
         if (drawingRunSet.has(run)) continue;  // skip diagram/shape label text
         // Skip deleted-text runs
@@ -1039,6 +1165,15 @@ function* iterBlockItems(body) {
 
         const rPr = run.getElementsByTagNameNS(W,'rPr')[0];
         if (rPr) {
+          // Detect legacy HYPY font and translate its proprietary mapping to Unicode
+          const rFonts = rPr.getElementsByTagNameNS(W,'rFonts')[0];
+          if (rFonts) {
+            const fontName = rFonts.getAttributeNS(W, 'ascii') || rFonts.getAttribute('w:ascii');
+            if (fontName && fontName.toLowerCase() === 'hypy') {
+              text = translateHypy(text);
+            }
+          }
+
           const vAlign = rPr.getElementsByTagNameNS(W,'vertAlign')[0];
           if (vAlign) {
             const v = getWVal(vAlign);
@@ -1115,6 +1250,15 @@ function* iterBlockItems(body) {
               if (!text) continue;
               const rPr = run.getElementsByTagNameNS(W,'rPr')[0];
               if (rPr) {
+                // Detect legacy HYPY font and translate its proprietary mapping to Unicode
+                const rFonts = rPr.getElementsByTagNameNS(W,'rFonts')[0];
+                if (rFonts) {
+                  const fontName = rFonts.getAttributeNS(W, 'ascii') || rFonts.getAttribute('w:ascii');
+                  if (fontName && fontName.toLowerCase() === 'hypy') {
+                    text = translateHypy(text);
+                  }
+                }
+
                 const vAlign = rPr.getElementsByTagNameNS(W,'vertAlign')[0];
                 if (vAlign) {
                   const v = getWVal(vAlign);
@@ -1247,24 +1391,56 @@ ${correctEl}</responseDeclaration>
 
 function essayItemXml(q, answerText) {
   const id = `Q${pad3(q.qnum)}_${randomId()}`;
-  // <correctResponse> must be a child of <responseDeclaration>, not a sibling.
-  // Only emit it when there is a real answer (not the placeholder "None").
+  // Only emit answer elements when there is a real answer (not the placeholder "None").
   const hasAnswer = answerText && answerText.trim() && answerText !== 'None';
+
+  // <correctResponse> inside <responseDeclaration> — stores the answer in the QTI data model.
   const correctEl = hasAnswer
     ? `\n  <correctResponse><value>${escXml(answerText)}</value></correctResponse>`
     : '';
+
+  // FEEDBACK outcome — baseType MUST be "identifier" per QTI 2.1 spec (§6.4).
+  // No defaultValue needed: responseProcessing sets it unconditionally below.
+  const feedbackOutcomeEl = hasAnswer
+    ? `\n<outcomeDeclaration identifier="FEEDBACK" cardinality="single" baseType="identifier"/>`
+    : '';
+
+  // <rubricBlock view="scorer"> — QTI standard marking-guide panel shown to scorers.
+  const rubricEl = hasAnswer
+    ? `\n  <rubricBlock view="scorer"><p>${escXml(answerText)}</p></rubricBlock>`
+    : '';
+
+  // <modalFeedback showHide="show"> — shown after response processing fires.
+  // Per spec §9: "shown directly following response processing."
+  const modalEl = hasAnswer
+    ? `\n<modalFeedback outcomeIdentifier="FEEDBACK" showHide="show" identifier="modelAnswer" title="Suggested Answer">
+  <p>${escXml(answerText)}</p>
+</modalFeedback>`
+    : '';
+
+  // <responseProcessing> — unconditionally sets FEEDBACK = "modelAnswer" so
+  // the modalFeedback triggers for every submission. Without this, modalFeedback
+  // never fires because FEEDBACK stays NULL and showHide="show" requires a match.
+  const rpEl = hasAnswer
+    ? `\n<responseProcessing>
+  <setOutcomeValue identifier="FEEDBACK">
+    <baseValue baseType="identifier">modelAnswer</baseValue>
+  </setOutcomeValue>
+</responseProcessing>`
+    : '';
+
   const xml = `<assessmentItem xmlns="${QTI_NS}" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
   adaptive="false" identifier="${id}" timeDependent="false" title="Q${pad3(q.qnum)}"
   xsi:schemaLocation="${QTI_XSD}">
 <responseDeclaration identifier="RESPONSE" cardinality="single" baseType="string">${correctEl}
 </responseDeclaration>
-<outcomeDeclaration baseType="float" cardinality="single" identifier="SCORE"/>
-<itemBody>
-  <prompt>\n${tokensToHtml(q.tokens)}</prompt>
-  <extendedTextInteraction responseIdentifier="RESPONSE" expectedLength="400"/>
-</itemBody>
+<outcomeDeclaration baseType="float" cardinality="single" identifier="SCORE"/>${feedbackOutcomeEl}
+<itemBody>${rubricEl}
+  <extendedTextInteraction responseIdentifier="RESPONSE" expectedLength="400">
+    <prompt>\n${tokensToHtml(q.tokens)}</prompt>
+  </extendedTextInteraction>
+</itemBody>${modalEl}${rpEl}
 </assessmentItem>`;
-  // Note: no <responseProcessing> for essays — they require human grading.
   return { id, xml };
 }
 
@@ -1285,6 +1461,29 @@ async function parseDocxToQuestions(file, msAnswers) {
   const xmlDoc = parser.parseFromString(docStr, 'application/xml');
   const body   = xmlDoc.getElementsByTagNameNS(W,'body')[0];
   if (!body) throw new Error('Cannot find document body — is this a valid .docx file?');
+
+  // ── Preprocess Hanyu Pinyin (<w:ruby> phonetic guides) ──────────────
+  const rubies = Array.from(xmlDoc.getElementsByTagNameNS(W, 'ruby'));
+  for (const ruby of rubies) {
+    const rt = ruby.getElementsByTagNameNS(W, 'rt')[0];
+    const base = ruby.getElementsByTagNameNS(W, 'rubyBase')[0];
+    const rtText = rt ? Array.from(rt.getElementsByTagNameNS(W, 't')).map(t => t.textContent).join('') : '';
+    const baseText = base ? Array.from(base.getElementsByTagNameNS(W, 't')).map(t => t.textContent).join('') : '';
+    
+    const escapeHTML = str => str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const rtSafe = escapeHTML(rtText);
+    const baseSafe = escapeHTML(baseText);
+    
+    // Create a fake <w:r> containing the generated HTML inside <w:t>
+    const fakeR = xmlDoc.createElementNS(W, 'w:r');
+    const fakeT = xmlDoc.createElementNS(W, 'w:t');
+    fakeT.textContent = `<ruby>${baseSafe}<rp>(</rp><rt>${rtSafe}</rt><rp>)</rp></ruby>`;
+    fakeR.appendChild(fakeT);
+    
+    if (ruby.parentNode) {
+      ruby.parentNode.replaceChild(fakeR, ruby);
+    }
+  }
 
   // ── Parse relationships (to resolve image rIds) ──────────────────────
   const imageRelTarget = {};   // rId → 'media/imageN.ext'
@@ -1352,16 +1551,34 @@ async function parseDocxToQuestions(file, msAnswers) {
   // ── Regex patterns ──────────────────────────────────────────────────
   // Matches question-start lines in multiple common formats:
   //   "1 text"   "1. text"   "1) text"   "(1) text"
+  //   "Q1 text"  "q1 text"   "（1） text"  etc.
   // Requires at least one whitespace after the delimiter to avoid matching
   // decimal numbers like "1.2" or sub-question labels like "1(a)".
-  const Q_RE        = /^(?:\((\d+)\)|(\d+)(?:[.)]\s+|\s+))([\s\S]+)/;
-  // Options: uppercase A./A) only — lowercase a)/b) are essay sub-questions, not MCQ options
-  const OPT_RE      = /^[A-D][\.\)]\s*(.*)/;
+  const Q_RE        = /^(?:[Qq](\d+)(?:[\.\)\s:]*\s+)?|\((\d+)\)|（(\d+)）|(\d+)(?:[.)]\s+|\s+))([\s\S]+)/;
+  // Options: A./A) uppercase letters
+  // OR ⑴⑵⑶⑷ circled bracket numbers (U+2474 - U+247B)
+  // OR ①②③④ circled solid numbers (U+2460 - U+2467)
+  // OR （1）（2） full-width Chinese brackets
+  // OR 1) / 1. / 1． numeric option labels
+  const OPT_RE      = /^(?:[A-H][\.\)]\s*|[\u2474-\u247B]\s*|[\u2460-\u2467]\s*|[（(]\s*[1-8]\s*[）)]\s*|[1-8][\.\)．]\s*)(.*)/;
+  const OPTIONS_HEADER_RE = /^(?:options|choices)(?:\s*[:：])?$/i;
+  const STANDALONE_OPTION_LABEL_RE = /^[A-D]$/i;
   // Allow up to 5 uppercase-letter prefix (Word cross-ref codes like "XX23")
   const QNUM_ONLY   = /^[A-Z]{0,5}(\d{1,3})$/;   // table first-cell
   const OPT_CELL_RE = /^([A-D])\s+(.*)/i;  // 'A   text' in a table options row
   const ANS_RE      = /^ANSWERS\s*$/i;
   const MAX_QNUM    = 200;   // ignore numbers > this (e.g. the year "2022")
+
+  // ── Essay-document question-label detector ────────────────────────────
+  // Matches bold section headings that begin a NEW question in notes/worksheet
+  // documents that have no standard "1." / "Q1" numbering.
+  const ESSAY_Q_LABEL_RE = /^(planning\s+question|practice\s+question|additional\s+question|self[\s-]directed\s+learning)\b/i;
+
+  // ── Answer-section delimiter detector ────────────────────────────────
+  // When a bold-heading paragraph matches this, everything that follows
+  // (until the next question label) is routed to curQ.suggestedAnswerText
+  // instead of the question prompt tokens.
+  const ANSWER_SPLIT_RE = /^(suggested\s+answers?|suggested\s+diagram|marking\s+scheme|marking\s+points?|possible\s+answers?(\s*\(\d+\))?|model\s+answers?)\b/i;
 
   // Parse question number from table first-cell (normalises 'XX23' → '23')
   // Also strips HTML tags e.g. '<strong>1</strong>' → '1'
@@ -1419,11 +1636,14 @@ async function parseDocxToQuestions(file, msAnswers) {
     const opts = last4.map((p, i) => {
       const plain = stripTags(p).replace(/\xa0/g,' ').replace(/\s+/g,' ').trim();
       if (!plain) return null;
-      // First character must match the expected option letter (case-insensitive)
-      if (plain[0].toLowerCase() !== letters[i]) return null;
-      // Strip the leading letter (and optional . ) separator + whitespace) from the HTML
-      const rest = p.replace(/^(?:<[^>]+>)*[A-D](?:<\/[^>]+>)*[\.\)]*\s*/i, '').trim();
-      return rest !== undefined ? rest : plain.slice(1).replace(/^[\.\)\s]+/, '').trim();
+      const m = plain.match(/^(?:([A-D])[\.\)]|[（(]\s*([1-4])\s*[）)])\s*(.*)$/i);
+      if (!m) return null;
+      const letter = m[1] ? m[1].toLowerCase() : null;
+      const number = m[2] || null;
+      if (letter && letter !== letters[i]) return null;
+      if (number && number !== String(i + 1)) return null;
+      const rest = m[3].trim();
+      return rest || null;
     });
     if (opts.every(opt => opt !== null)) return opts;
     return null;
@@ -1469,12 +1689,25 @@ async function parseDocxToQuestions(file, msAnswers) {
   let inAnswers = false, curAQ = null, curATokens = [];
   // Counter for DOCX automatic-numbered lists (keyed by "numId:ilvl")
   const numCounter = new Map();
+  // Auto-incrementing counter for label-based questions (Planning Question, etc.)
+  let autoQCounter = 1;
+  // True when subsequent content belongs to the suggested answer, not the prompt
+  let inSuggestedAnswer = false;
+  // True when curQ was started by a plain-text detector (Q_RE / Q-prefix / essay label).
+  // False when started by Path B numPr decimal.
+  // Used so that decimal-numPr items after a text-detected question are treated as
+  // MCQ options rather than new question starts (handles Chinese Q1/Q2 worksheets).
+  let curQFromText = false;
 
   function flushQuestion() {
     if (!curQ) return;
+    if (curQ.suggestedAnswerText)
+      curQ.suggestedAnswerText = curQ.suggestedAnswerText.trim();
     curOpts.length ? mcq.push({...curQ, options:[...curOpts], optionImages:[...curOptImages]})
                    : structured.push({...curQ});
     curQ = null; curOpts = []; curOptImages = [];
+    inSuggestedAnswer = false;
+    curQFromText = false;
   }
 
   // ── Resolve answer: MS file takes priority over inline ANSWERS section ──
@@ -1513,11 +1746,30 @@ async function parseDocxToQuestions(file, msAnswers) {
       continue;
     }
 
-    // --- Images attach to current question ---
+    // --- Images attach to current question (skipped if in answer mode — text only) ---
     if (item.type === 'image') {
       if (curQ) {
         const fn = await resolveImage(item.value);
-        if (fn) curQ.tokens.push({ type:'image', value:fn });
+        if (fn) {
+          if (inSuggestedAnswer) {
+            // Append a placeholder so the teacher knows a diagram exists
+            curQ.suggestedAnswerText = (curQ.suggestedAnswerText || '') + '[diagram]\n';
+          } else {
+            curQ.tokens.push({ type:'image', value:fn });
+          }
+        }
+      }
+      continue;
+    }
+
+    // --- Tables in answer mode: skip (marking schemes are text-only in the textarea) ---
+    if (item.type === 'table' && inSuggestedAnswer) {
+      // Flatten table rows into plain text lines for the suggested answer
+      if (curQ) {
+        for (const row of (item.value || [])) {
+          const line = row.map(c => stripTags(c).replace(/\xa0/g,' ').trim()).filter(Boolean).join(' | ');
+          if (line) curQ.suggestedAnswerText = (curQ.suggestedAnswerText || '') + line + '\n';
+        }
       }
       continue;
     }
@@ -1694,30 +1946,108 @@ async function parseDocxToQuestions(file, msAnswers) {
     if (ANS_RE.test(plain)) { inAnswers = true; continue; }
     if (!plain && !item.numPr) continue;   // skip truly empty paragraphs
 
+    // ── Essay-label question detection (e.g. "Planning Question (Example 1)") ──
+    // Only triggers when no numeric Q_RE match exists, so it never conflicts
+    // with standard numbered exam papers.
+    if (plain && ESSAY_Q_LABEL_RE.test(plain)) {
+      flushQuestion();                  // saves previous Q + resets inSuggestedAnswer
+      curQ    = { qnum: String(autoQCounter++), tokens: [], suggestedAnswerText: '' };
+      curOpts = []; curOptImages = [];
+      curQFromText = true;
+      // The label text (e.g. "Planning Question (Example 1)") becomes the first token
+      curQ.tokens.push({ type: 'text', value: raw });
+      continue;
+    }
+
     // ── Path A: plain-text question number in the text itself ────────────
+    // MUST come before inSuggestedAnswer routing: a new numbered question always
+    // terminates the previous answer section (flushQuestion resets the flag).
     if (plain) {
-      const qMatch = plain.match(Q_RE);
-      if (qMatch) {
-        // Group layout: paren-style "(1) text" → groups [1]=num, [3]=text
-        //               regular   "1. text"   → groups [2]=num, [3]=text
-        const qnum = qMatch[1] || qMatch[2];
-        const qtext = qMatch[3];
-        if (parseInt(qnum) <= MAX_QNUM) {
-          flushQuestion();
-          curQ    = { qnum, tokens: [] };
-          curOpts = []; curOptImages = [];
-          // Strip the leading "N." / "N)" / "(N)" from raw HTML, keep rest
-          const bodyText = raw.replace(/^(?:<[^>]*>)*(?:\(\d+\)|\d+[.)])(?:<\/[^>]*>)*\s*/,'').trim()
-                        || raw.replace(/^(?:<[^>]*>)*\d+(?:<\/[^>]*>)*\s+/,'').trim()
-                        || qtext;
-          curQ.tokens.push({ type:'text', value: bodyText });
+      if (curQ) {
+        const earlyOptMatch = plain.match(OPT_RE);
+        if (earlyOptMatch) {
+          curOpts.push(earlyOptMatch[1] ?? '');
+          curOptImages.push(null);
           continue;
         }
       }
+      const qMatch = plain.match(Q_RE);
+      if (qMatch) {
+        // Group layout: Q-prefix "Q1 text" → groups [1]=num
+        //               paren-style "(1) text" → groups [2]=num
+        //               full-width paren "（1） text" → groups [3]=num
+        //               regular "1. text" → groups [4]=num
+        const qnum = qMatch[1] || qMatch[2] || qMatch[3] || qMatch[4];
+        const qtext = qMatch[5];
+        if (parseInt(qnum) <= MAX_QNUM) {
+          flushQuestion();           // resets inSuggestedAnswer
+          curQ    = { qnum, tokens: [] };
+          curOpts = []; curOptImages = [];
+          curQFromText = true;
+          // Strip the leading "Q1." / "Q1)" / "(1)" / "（1）」 / "1." from raw HTML, keep rest
+          const bodyText = raw.replace(/^(?:<[^>]*>)*(?:[Qq]\d+(?:[\.\)\s:]*\s+)?|\(\d+\)|（\d+）|\d+[.)])(?:<\/[^>]*>)*\s*/,'').trim()
+                        || raw.replace(/^(?:<[^>]*>)*[Qq]?\d+(?:<\/[^>]*>)*\s+/,'').trim()
+                        || qtext;
+          curQ.tokens.push({ type:'text', value: bodyText });
+          continue;
+      }
+      
+      // Inline Q-prefix for fill-in-the-blank style questions (e.g. Q16(...) or conversational Q26？)
+      // Make sure it's not matching instruction ranges like "Q1-Q2"
+      const rangeMatch = plain.match(/[Qq]\d+\s*[-－到至\u2013\u2014]\s*[Qq]\d+/);
+      const inlineQMatch = plain.match(/(?:^|[^A-Za-z0-9])[Qq](\d{1,3})(?:[^A-Za-z0-9]|$)/);
+      
+      if (inlineQMatch && !rangeMatch && parseInt(inlineQMatch[1]) <= MAX_QNUM) {
+          flushQuestion();
+          curQ = { qnum: inlineQMatch[1], tokens: [] };
+          curOpts = []; curOptImages = [];
+          curQFromText = true;
+          // Keep whole paragraph context for the inline question
+          curQ.tokens.push({ type: 'text', value: raw });
 
+          // Try to extract inline options: e.g. Q16（1 肯定 2 挑选 3 安排 4选择）
+          const clozeMatch = plain.match(/[Qq]\d{1,3}\s*[（\(](.*?)[）\)]/);
+          if (clozeMatch) {
+              const innerTxt = clozeMatch[1].trim();
+              const optionParts = innerTxt.split(/(?:^|\s+)[a-hA-H1-8][\.\)\s]+/i).filter(Boolean);
+              if (optionParts.length >= 2 && optionParts.length <= 8) {
+                  for (const o of optionParts) {
+                     curOpts.push(o.trim());
+                     curOptImages.push(null);
+                  }
+              }
+          }
+          continue;
+      }
+    }
+    }
+
+    // ── Answer-section delimiter (e.g. "Suggested Answer", "Marking Scheme") ──
+    // Everything after this heading goes into curQ.suggestedAnswerText.
+    if (plain && ANSWER_SPLIT_RE.test(plain) && curQ && !inSuggestedAnswer) {
+      inSuggestedAnswer = true;
+      // Don't add the heading itself to either the prompt or the answer
+      continue;
+    }
+
+    // Skip plain "Options"/"Choices" headers and standalone A/B/C/D labels
+    // that appear after the detected options list in some Chinese paper layouts.
+    if (plain && curQ) {
+      if (OPTIONS_HEADER_RE.test(plain)) continue;
+      if (curOpts.length > 0 && STANDALONE_OPTION_LABEL_RE.test(plain)) continue;
+    }
+
+    // ── Route content to suggestedAnswerText when in answer mode ────────
+    if (inSuggestedAnswer && curQ) {
+      if (plain) curQ.suggestedAnswerText = (curQ.suggestedAnswerText || '') + plain + '\n';
+      continue;
+    }
+
+    // ── OPT_RE — only fires when NOT in answer mode ──────────────────────
+    if (plain) {
       const optMatch = plain.match(OPT_RE);
       if (optMatch && curQ) {
-        curOpts.push(optMatch[1]);
+        curOpts.push(optMatch[1] ?? '');
         curOptImages.push(null);   // no image for paragraph-based options
         continue;
       }
@@ -1735,13 +2065,21 @@ async function parseDocxToQuestions(file, msAnswers) {
       const cKey   = `${numId}:${ilvl}`;
 
       if (/^decimal/i.test(fmt) && plain) {
-        // Auto-numbered question stem (only if there is actual text content)
-        numCounter.set(cKey, (numCounter.get(cKey) || 0) + 1);
-        const autoQnum = String(numCounter.get(cKey));
-        flushQuestion();
-        curQ    = { qnum: autoQnum, tokens: [] };
-        curOpts = []; curOptImages = [];
-        curQ.tokens.push({ type: 'text', value: raw });
+        if (curQFromText && curQ) {
+          // Question stem was detected from plain text (e.g. "Q1 …") — treat
+          // decimal-numPr items as MCQ options (Chinese worksheet style).
+          curOpts.push(plain);
+          curOptImages.push(null);
+        } else {
+          // Auto-numbered question stem (standard exam auto-list style)
+          numCounter.set(cKey, (numCounter.get(cKey) || 0) + 1);
+          const autoQnum = String(numCounter.get(cKey));
+          flushQuestion();
+          curQ    = { qnum: autoQnum, tokens: [] };
+          curOpts = []; curOptImages = [];
+          curQFromText = false;
+          curQ.tokens.push({ type: 'text', value: raw });
+        }
         continue;
       }
 
@@ -1762,7 +2100,11 @@ async function parseDocxToQuestions(file, msAnswers) {
 
   const totalQ = mcq.length + structured.length;
   if (totalQ === 0)
-    throw new Error('No questions found. Each question must start with a number in one of these formats: "1 What is…", "1. What is…", "1) What is…", or "(1) What is…".');
+    throw new Error(
+      'No questions found. Questions must either:\n' +
+      '• Start with a number: "1 What is…", "1. What is…", "1) What is…", "(1) What is…"\n' +
+      '• OR start with a bold label: "Planning Question", "Practice Question", "Additional question"'
+    );
 
   // ── Merge, deduplicate, sort — MCQ wins over structured for same qnum ──
   const qByNum = new Map();
@@ -1771,7 +2113,12 @@ async function parseDocxToQuestions(file, msAnswers) {
 
   const allQuestions = [...qByNum.values()]
     .sort((a, b) => parseInt(a.q.qnum) - parseInt(b.q.qnum))
-    .map(({ isMcq, q }) => ({ isMcq, q, answer: resolveAnswer(q.qnum) }));
+    .map(({ isMcq, q }) => ({
+      isMcq,
+      q,
+      // suggestedAnswerText (auto-extracted from doc) takes priority over MS file / inline answers
+      answer: q.suggestedAnswerText || resolveAnswer(q.qnum)
+    }));
 
   return { allQuestions, resolvedImages };
 }
@@ -1947,7 +2294,7 @@ function buildCard(entry, imageUrls, idx) {
     const optsWrap = document.createElement('div');
     optsWrap.className = 'q-options';
 
-    q.options.forEach((opt, oi) => {
+    q.options.slice(0, LETTERS.length).forEach((opt, oi) => {
       const row = document.createElement('div');
       row.className = 'option-row';
       row.style.alignItems = 'flex-start';
@@ -2012,6 +2359,19 @@ function buildCard(entry, imageUrls, idx) {
 
     ansRow.appendChild(sel);
     card.appendChild(ansRow);
+
+  } else {
+    // ── Essay suggested answer field ─────────────────────────────────────
+    const ansLabel = document.createElement('div');
+    ansLabel.className = 'q-essay-answer-label';
+    ansLabel.textContent = '✏ Suggested answer (optional — injected into QTI export):';
+    card.appendChild(ansLabel);
+
+    const ansTA = document.createElement('textarea');
+    ansTA.className = 'essay-answer-input';
+    ansTA.placeholder = 'Type or paste the model answer here…';
+    ansTA.value = (answer && answer !== 'None') ? answer : '';
+    card.appendChild(ansTA);
   }
 
   return card;
@@ -2036,6 +2396,7 @@ function readEditorState() {
     const newQ = { ...q, tokens: newTokens };
 
     // MCQ: read option inputs + answer select
+    // Essay: read suggested answer textarea
     let newAnswer = entry.answer;
     if (isMcq) {
       newQ.options = q.options.map((opt, oi) => {
@@ -2045,11 +2406,32 @@ function readEditorState() {
       });
       const sel = card.querySelector('.answer-select');
       if (sel) newAnswer = sel.value;
+    } else {
+      const ta = card.querySelector('.essay-answer-input');
+      if (ta) newAnswer = ta.value.trim();
     }
 
     return { isMcq, q: newQ, answer: newAnswer };
   });
 }
+
+// "Set unanswered MCQ → A" checkbox ──────────────────────────────────────────
+document.getElementById('setAllAChk').addEventListener('change', function () {
+  if (!this.checked) return;
+  // Find every MCQ answer-select that has no answer chosen (value === '')
+  const selects = document.querySelectorAll('#questionCards .answer-select');
+  let count = 0;
+  selects.forEach(sel => {
+    if (sel.value === '') {
+      sel.value = 'a';
+      sel.dispatchEvent(new Event('change'));   // trigger highlight update
+      count++;
+    }
+  });
+  // Uncheck immediately so it acts as a one-shot action button
+  this.checked = false;
+  if (count === 0) alert('All MCQ questions already have an answer selected.');
+});
 
 // Export button ───────────────────────────────────────────────────────────────
 document.getElementById('exportBtn').addEventListener('click', async () => {
@@ -2105,7 +2487,7 @@ document.getElementById('resetBtn').addEventListener('click', () => {
 });
 </script>
 <footer style="text-align:center; padding: 16px 0 10px; color: #999; font-size: 0.78rem; font-family: sans-serif;">
-  Last updated: Thursday, 9 April 2026, 8:23 AM
+  Last updated: Saturday, 12 April 2026, 12:00 PM
 </footer>
 </body>
 </html>

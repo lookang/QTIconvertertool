@@ -10,84 +10,101 @@ import re
 
 def parse_mark_scheme(ms_docx_path):
     """
-    Parse a mark-scheme .docx and return a dict  {qnum_str: answer}.
-
-    MCQ papers (P1):
-        The first table is a 6-row × 10-col grid of alternating
-        [question-numbers, answer-letters] rows. Each answer letter is stored
-        as lowercase ('a'–'d') to match QTI simpleChoice identifiers.
-
-    Structured papers (P2 / P3):
-        The table rows have the form  [part_label, answer_text, marks…].
-        All parts belonging to the same question number are concatenated.
-        Result: { '1': '1a: …\n1bi: …\n…', '2': '2a: …', … }
+    Parse a mark scheme document. Returns a dictionary mapping
+    question numbers (strings) to answer text or options.
+    It scans tables for both row-style and col-style MCQ grids,
+    and scans paragraphs for both MCQ and essay answers.
     """
-    doc    = Document(ms_docx_path)
-    tables = doc.tables
-    if not tables:
-        return {}
-
-    first  = tables[0]
-    nrows  = len(first.rows)
-    ncols  = len(first.columns) if first.rows else 0
-
-    # --- MCQ grid detection ---
-    if nrows >= 6 and ncols >= 10:
-        first_cell = first.rows[0].cells[0].text.strip()
-        if first_cell.isdigit():
-            return _parse_mcq_grid(first)
-
-    # --- Structured MS ---
-    return _parse_structured_ms(tables)
-
-
-def _parse_mcq_grid(grid_table):
-    """
-    Alternating rows: [q-numbers …], [answer-letters …], [q-numbers …], …
-    Returns { '1': 'b', '2': 'c', … } (lowercase letters).
-    """
-    answers = {}
-    rows = [[c.text.strip() for c in r.cells] for r in grid_table.rows]
-
-    for i in range(0, len(rows) - 1, 2):
-        nums_row = rows[i]
-        ans_row  = rows[i + 1]
-        for qn, ans in zip(nums_row, ans_row):
-            qn  = qn.strip()
-            ans = ans.strip().upper()
-            if qn.isdigit() and ans in ('A', 'B', 'C', 'D'):
-                answers[qn] = ans.lower()
-
-    return answers
-
-
-def _parse_structured_ms(all_tables):
-    """
-    Rows: [part_label, answer_text, marks…]
-    e.g. ['1a', 'rate of change of velocity', 'B1']
-         ['1bi', 'Taking upwards …', 'C1\nA1']
-    Returns { '1': '1a: rate of change…\n1bi: Taking upwards…', … }
-    """
+    import re
+    doc = Document(ms_docx_path)
     answers = {}
 
-    for table in all_tables:
-        for row in table.rows:
-            cells = [c.text.strip() for c in row.cells]
-            if len(cells) < 2:
+    # 1. Parse tables for MCQ grid and structured
+    for table in doc.tables:
+        for r_idx, row in enumerate(table.rows):
+            for c_idx, cell in enumerate(row.cells):
+                ctext = cell.text.strip().upper()
+                mQ = re.match(r'^Q?0*(\d+)$', ctext)
+                if mQ:
+                    qnum_str = mQ.group(1)
+                    found_ans = False
+                    
+                    # Check right cell (column-style)
+                    if c_idx + 1 < len(row.cells):
+                        right = row.cells[c_idx+1].text.strip()
+                        right_upper = right.upper()
+                        if re.match(r'^[ABCD]$', right_upper):
+                            answers[qnum_str] = right.lower()
+                            found_ans = True
+                        elif re.match(r'^[1234]$', right_upper):
+                            answers[qnum_str] = chr(96 + int(right))
+                            found_ans = True
+                        elif right:
+                            if qnum_str in answers and len(answers[qnum_str]) > 1:
+                                answers[qnum_str] += '\n' + right
+                            else:
+                                answers[qnum_str] = right
+                            found_ans = True
+                    
+                    # Check bottom cell (row-style)
+                    if not found_ans and r_idx + 1 < len(table.rows):
+                        bottom = table.rows[r_idx+1].cells[c_idx].text.strip().upper()
+                        if re.match(r'^[ABCD]$', bottom):
+                            answers[qnum_str] = bottom.lower()
+                        elif re.match(r'^[1234]$', bottom):
+                            answers[qnum_str] = chr(96 + int(bottom))
+                else:
+                    struct_match = re.match(r'^[Qq]?0*(\d+)[.:：]\s*(.*)', cell.text)
+                    if struct_match:
+                        qnum_str = struct_match.group(1)
+                        text = struct_match.group(2).strip()
+                        if text:
+                            answers[qnum_str] = text
+
+    # 2. Parse paragraphs for answers (Essay style & list style)
+    current_qnum = None
+    for para in doc.paragraphs:
+        pt = para.text.strip()
+        if not pt:
+            continue
+            
+        qnum = None
+        ans_text = ""
+        m1 = re.match(r'^[Qq]0*(\d+)[.:：\s]*(.*)', pt)
+        m2 = re.match(r'^0*(\d+)[.:：]+\s*(.*)', pt)
+        if m1:
+            qnum = m1.group(1)
+            ans_text = m1.group(2).strip()
+        elif m2:
+            qnum = m2.group(1)
+            ans_text = m2.group(2).strip()
+
+        if qnum:
+            is_mcq = False
+            clean_ans = ans_text.upper().replace('.', '').strip()
+            if re.match(r'^[ABCD]$', clean_ans):
+                ans_text = clean_ans.lower()
+                is_mcq = True
+            elif re.match(r'^[1234]$', clean_ans):
+                ans_text = chr(96 + int(clean_ans))
+                is_mcq = True
+
+            if qnum in answers and re.match(r'^[a-d]$', answers[qnum]):
+                if is_mcq:
+                    answers[qnum] = ans_text
+                current_qnum = None
                 continue
-            label = cells[0]
-            text  = cells[1]
-            if not label or not text:
-                continue
-            m = re.match(r'^(\d+)', label)
-            if not m:
-                continue
-            qnum = m.group(1)
-            entry = f"{label}: {text}"
-            if qnum in answers:
-                answers[qnum] += "\n" + entry
+                
+            if qnum in answers and len(answers[qnum]) > 1 and not is_mcq and answers[qnum] != ans_text:
+                if ans_text not in answers[qnum]:
+                    answers[qnum] += '\n' + pt
             else:
-                answers[qnum] = entry
+                answers[qnum] = ans_text or pt
+            
+            current_qnum = None if is_mcq else qnum
+        else:
+            if current_qnum and current_qnum in answers:
+                answers[current_qnum] += '\n' + pt
 
     return answers
 
@@ -110,6 +127,29 @@ def convert_docx_to_qti(input_docx, job_dir, ms_answers=None):
                   ('a'–'d') matching the simpleChoice identifier.
     """
     doc = Document(input_docx)
+
+    # -----------------------------
+    # PRE-PROCESS HANYU PINYIN (W:RUBY)
+    # -----------------------------
+    import html
+    from docx.oxml import OxmlElement
+    for ruby in doc.element.xpath('.//*[local-name()="ruby"]'):
+        rt = ruby.xpath('.//*[local-name()="rt"]')
+        base = ruby.xpath('.//*[local-name()="rubyBase"]')
+        # Extract text from descendants
+        rt_text = "".join(t.text or "" for r in rt for t in r.xpath('.//*[local-name()="t"]')) if rt else ""
+        base_text = "".join(t.text or "" for r in base for t in r.xpath('.//*[local-name()="t"]')) if base else ""
+        
+        rt_safe = html.escape(rt_text)
+        base_safe = html.escape(base_text)
+        
+        fake_r = OxmlElement('w:r')
+        fake_t = OxmlElement('w:t')
+        fake_t.text = f"<ruby>{base_safe}<rp>(</rp><rt>{rt_safe}</rt><rp>)</rp></ruby>"
+        fake_r.append(fake_t)
+        
+        ruby.addprevious(fake_r)
+        ruby.getparent().remove(ruby)
 
     assets_dir = os.path.join(job_dir, "assets")
     items_dir  = os.path.join(job_dir, "items")
@@ -141,6 +181,16 @@ def convert_docx_to_qti(input_docx, job_dir, ms_answers=None):
         text = "".join(node.text or "" for node in run.xpath(".//w:t"))
         if not text:
             return ""
+            
+        rPr = run.find(qn('w:rPr'))
+        if rPr is not None:
+            rFonts = rPr.find(qn('w:rFonts'))
+            if rFonts is not None:
+                ascii_font = rFonts.get(qn('w:ascii'))
+                if ascii_font and ascii_font.lower() == 'hypy':
+                    mapping = {'C': 'ǎ', 'H': 'ǐ', 'K': 'ē', 'N': 'è', 'P': 'ē', 'Q': 'ó', 'S': 'è', 'A': 'ā', 'B': 'á', 'D': 'à', 'E': 'ō', 'F': 'ó', 'G': 'ǒ', 'I': 'ī', 'J': 'í', 'L': 'ì', 'M': 'ū', 'O': 'ǔ', 'R': 'ú', 'T': 'ù', 'U': 'ǖ', 'V': 'ǘ', 'W': 'ǚ', 'X': 'ǜ', 'Y': 'ě', 'Z': 'ě'}
+                    text = "".join(mapping.get(c, c) for c in text)
+
         is_sup    = run.xpath(".//w:vertAlign[@w:val='superscript']")
         is_sub    = run.xpath(".//w:vertAlign[@w:val='subscript']")
         is_bold   = run.xpath(".//w:b")
@@ -294,8 +344,10 @@ def convert_docx_to_qti(input_docx, job_dir, ms_answers=None):
     # -----------------------------
     # REGEX PATTERNS (STRICT)
     # -----------------------------
-    question_regex  = re.compile(r'^(\d+)\s+(.*)')
-    option_regex    = re.compile(r'^[A-D][\.\)]\s*(.*)')
+    question_regex  = re.compile(r'^(?:[Qq](\d+)(?:[\.\)\s:]*\s+)?|\((\d+)\)|（(\d+)）|(\d+)(?:[\.\)]\s+|\s+))(.*)')
+    option_regex    = re.compile(r'^(?:[A-H][\.\)]\s*|[\u2474-\u247B]\s*|[\u2460-\u2467]\s*|[（(]\s*[1-8]\s*[）)]\s*|[1-8][\.\)．]\s*)(.*)')
+    OPTIONS_HEADER_RE = re.compile(r'^(?:options|choices)(?:\s*[:：])?$', re.IGNORECASE)
+    STANDALONE_OPTION_LABEL_RE = re.compile(r'^[A-D]$', re.IGNORECASE)
     # Table first-cell is a bare question number, optionally with a short
     # non-digit prefix from Word cross-reference field codes (e.g. "XX23").
     qnum_only_regex = re.compile(r'^[A-Z]{0,5}(\d{1,3})$')
@@ -313,6 +365,14 @@ def convert_docx_to_qti(input_docx, job_dir, ms_answers=None):
             if n <= MAX_QNUM:
                 return str(n)   # normalise to plain digit string
         return None
+
+    # Pattern to detect labelled question tables (notes-style docs)
+    # e.g. "Planning Question (Example 1)", "Practice Question", "Additional question 2"
+    labelled_q_regex = re.compile(
+        r'^(planning question|practice question|additional question)',
+        re.IGNORECASE
+    )
+    labelled_q_counter = [0]   # mutable so nested flush_current can read it
 
     # -----------------------------
     # STORAGE
@@ -397,8 +457,39 @@ def convert_docx_to_qti(input_docx, job_dir, ms_answers=None):
                             "tokens": current_tokens
                         })
 
+            # ── Labelled question table (notes-style docs) ────────────────
+            # e.g. "Planning Question (Example 1)", "Practice Question"
+            # Strip only first line (the label) and treat rest as question text.
+            first_cell_plain = re.sub(r'<[^>]+>', '', first_cell).strip().split('\n')[0].strip()
+            is_labelled_q = labelled_q_regex.match(first_cell_plain)
+
+            if is_labelled_q and detected_qnum is None:
+                flush_current()
+                labelled_q_counter[0] += 1
+                current_qnum = str(labelled_q_counter[0])
+                current_tokens = []
+                options = []
+                # The full first-cell text (after stripping the label line) is the question body
+                # We keep everything — the converter will include the label too which helps context
+                full_text = first_cell.replace('\r', '').strip()
+                if full_text:
+                    current_tokens.append(("text", full_text))
+                # Additional rows in same table that are NOT answer rows go in too
+                ANSWER_LABELS = re.compile(
+                    r'^(suggested answer|marking scheme|possible answer)',
+                    re.IGNORECASE
+                )
+                for row in rows[1:]:
+                    row0 = row[0].strip() if row else ''
+                    row0_plain = re.sub(r'<[^>]+>', '', row0).strip().split('\n')[0]
+                    if ANSWER_LABELS.match(row0_plain):
+                        break   # Stop before model answers
+                    extra = dedup_cells(row)
+                    if extra:
+                        current_tokens.append(("text", extra))
+
             # ── Question-start table: first cell is a question number ──────
-            if detected_qnum is not None:
+            elif detected_qnum is not None:
 
                 flush_current()
 
@@ -477,8 +568,14 @@ def convert_docx_to_qti(input_docx, job_dir, ms_answers=None):
                 continue
 
             qmatch = question_regex.match(text)
+            qnum_str = qmatch.group(1) or qmatch.group(2) or qmatch.group(3) or qmatch.group(4) if qmatch else None
+            opt = option_regex.match(text)
 
-            if qmatch and int(qmatch.group(1)) <= MAX_QNUM:
+            if current_qnum is not None and opt:
+                options.append(opt.group(1))
+                continue
+
+            if qmatch and qnum_str and int(qnum_str) <= MAX_QNUM:
 
                 if current_qnum is not None:
 
@@ -494,14 +591,46 @@ def convert_docx_to_qti(input_docx, job_dir, ms_answers=None):
                             "tokens": current_tokens
                         })
 
-                current_qnum   = qmatch.group(1)
-                current_tokens = [("text", qmatch.group(2))]
+                current_qnum   = qnum_str
+                current_tokens = [("text", qmatch.group(5) or "")]
                 options        = []
                 continue
 
-            opt = option_regex.match(text)
+            if OPTIONS_HEADER_RE.match(text):
+                continue
+            if current_qnum is not None and options and STANDALONE_OPTION_LABEL_RE.match(text):
+                continue
 
-            if opt:
+            range_match = re.search(r'[Qq]\d+\s*[-－到至\u2013\u2014]\s*[Qq]\d+', text)
+            inline_qmatch = re.search(r'(?:^|[^A-Za-z0-9])[Qq](\d{1,3})(?:[^A-Za-z0-9]|$)', text)
+            
+            if inline_qmatch and not range_match and int(inline_qmatch.group(1)) <= MAX_QNUM:
+                if current_qnum is not None:
+                    if options:
+                        mcq_questions.append({
+                            "qnum":    current_qnum,
+                            "tokens":  current_tokens,
+                            "options": options
+                        })
+                    else:
+                        structured_questions.append({
+                            "qnum":   current_qnum,
+                            "tokens": current_tokens
+                        })
+                current_qnum = inline_qmatch.group(1)
+                current_tokens = [("text", text)]
+                options = []
+                
+                cloze_match = re.search(r'[Qq]\d{1,3}\s*[（\(](.*?)[）\)]', text)
+                if cloze_match:
+                    inner_txt = cloze_match.group(1).strip()
+                    # Split horizontally using python regex
+                    parts = [p.strip() for p in re.split(r'(?:^|\s+)[a-hA-H1-8][\.\)\s]+', inner_txt) if p.strip()]
+                    if 2 <= len(parts) <= 8:
+                        options = parts
+                continue
+
+            if opt and current_qnum is not None:
                 options.append(opt.group(1))
                 continue
 
@@ -565,7 +694,8 @@ def convert_docx_to_qti(input_docx, job_dir, ms_answers=None):
 
             if ttype == "text":
 
-                safe  = saxutils.escape(val)
+                safe_val = val if val is not None else ""
+                safe  = saxutils.escape(safe_val)
                 safe  = safe.replace("&lt;", "<").replace("&gt;", ">")
                 html += f"<div>{safe}</div>\n"
 
@@ -670,7 +800,7 @@ xsi:schemaLocation="http://www.imsglobal.org/xsd/imsqti_v2p1 http://www.imsgloba
 </responseDeclaration>
 <outcomeDeclaration baseType="float" cardinality="single" identifier="SCORE"/>
 <itemBody>
-<choiceInteraction responseIdentifier="RESPONSE" shuffle="true" maxChoices="1">
+<choiceInteraction responseIdentifier="RESPONSE" shuffle="false" maxChoices="1">
 <prompt>
 <div>
 {stem_html}
@@ -701,27 +831,38 @@ xsi:schemaLocation="http://www.imsglobal.org/xsd/imsqti_v2p1 http://www.imsgloba
 
             stem_html = tokens_to_html(q["tokens"])
 
-            xml = f'''<assessmentItem xmlns="http://www.imsglobal.org/xsd/imsqti_v2p1"
-xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-adaptive="false"
-identifier="{item_id}"
-timeDependent="false"
-title="Q{int(q['qnum']):03d}"
-xsi:schemaLocation="http://www.imsglobal.org/xsd/imsqti_v2p1 http://www.imsglobal.org/xsd/qti/qtiv2p1/imsqti_v2p1.xsd">
-<responseDeclaration identifier="RESPONSE" cardinality="single" baseType="string"/>
-<correctResponse>
-<value>{saxutils.escape(answer_text)}</value>
-</correctResponse>
-<outcomeDeclaration baseType="float" cardinality="single" identifier="SCORE"/>
-<itemBody>
-<prompt>
-{stem_html}
-</prompt>
-<extendedTextInteraction responseIdentifier="RESPONSE" expectedLength="400"/>
-</itemBody>
-<responseProcessing template="http://www.imsglobal.org/question/qti_v2p1/rptemplates/match_correct"/>
-</assessmentItem>
-'''
+            # SLS-compatible open-ended/essay item:
+            # - responseDeclaration is self-closing (no correctResponse)
+            # - Question HTML placed directly in itemBody as <div> blocks
+            # - <prompt> goes INSIDE <extendedTextInteraction>
+            # - No <responseProcessing> — teacher marks manually in SLS
+            qnum_str = f"Q{int(q['qnum']):03d}"
+            xml = (
+                f'<assessmentItem xmlns="http://www.imsglobal.org/xsd/imsqti_v2p1" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"\n'
+                f'  adaptive="false" identifier="{item_id}" timeDependent="false" title="{qnum_str}"\n'
+                f'  xsi:schemaLocation="http://www.imsglobal.org/xsd/imsqti_v2p1 http://www.imsglobal.org/xsd/qti/qtiv2p1/imsqti_v2p1.xsd">\n'
+                '<responseDeclaration identifier="RESPONSE" cardinality="single" baseType="string">\n'
+                f'  <correctResponse><value>{saxutils.escape(answer_text)}</value></correctResponse>\n'
+                '</responseDeclaration>\n'
+                '<outcomeDeclaration baseType="float" cardinality="single" identifier="SCORE"/>\n'
+                '<outcomeDeclaration identifier="FEEDBACK" cardinality="single" baseType="identifier"/>\n'
+                '<itemBody>\n'
+                f'  <rubricBlock view="scorer"><div>{saxutils.escape(answer_text)}</div></rubricBlock>\n'
+                '  <prompt>\n'
+                f'{stem_html}'
+                '  </prompt>\n'
+                '  <extendedTextInteraction responseIdentifier="RESPONSE" expectedLength="400"/>\n'
+                '</itemBody>\n'
+                '<modalFeedback outcomeIdentifier="FEEDBACK" showHide="show" identifier="modelAnswer" title="Suggested Answer">\n'
+                f'  <div>{saxutils.escape(answer_text)}</div>\n'
+                '</modalFeedback>\n'
+                '<responseProcessing>\n'
+                '  <setOutcomeValue identifier="FEEDBACK">\n'
+                '    <baseValue baseType="identifier">modelAnswer</baseValue>\n'
+                '  </setOutcomeValue>\n'
+                '</responseProcessing>\n'
+                '</assessmentItem>\n'
+            )
 
         with open(filename, "w", encoding="utf-8") as f:
             f.write(xml)
@@ -733,10 +874,9 @@ xsi:schemaLocation="http://www.imsglobal.org/xsd/imsqti_v2p1 http://www.imsgloba
     # -----------------------------
     # assessment_test.xml
     # -----------------------------
-    assessment_xml = '''
-<assessmentTest xmlns="http://www.imsglobal.org/xsd/imsqti_v2p1"
-xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-identifier="TEST1" title="Converted Test" xsi:schemaLocation="http://www.imsglobal.org/xsd/imsqti_v2p1 http://www.imsglobal.org/xsd/qti/qtiv2p1/imsqti_v2p1.xsd">
+    assessment_xml = '''<assessmentTest xmlns="http://www.imsglobal.org/xsd/imsqti_v2p1" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  identifier="TEST1" title="Converted Test"
+  xsi:schemaLocation="http://www.imsglobal.org/xsd/imsqti_v2p1 http://www.imsglobal.org/xsd/qti/qtiv2p1/imsqti_v2p1.xsd">
 <testPart identifier="part1" navigationMode="linear" submissionMode="individual">
 <assessmentSection identifier="section1" title="Converted Test" visible="true">
 '''
@@ -756,21 +896,13 @@ identifier="TEST1" title="Converted Test" xsi:schemaLocation="http://www.imsglob
     # -----------------------------
     # imsmanifest.xml
     # -----------------------------
-    manifest = '''
-<manifest
-xmlns="http://www.imsglobal.org/xsd/imscp_v1p1"
-xmlns:imsmd="http://www.imsglobal.org/xsd/imsmd_v1p2"
-xmlns:imsqti="http://www.imsglobal.org/xsd/imsqti_metadata_v2p1"
-xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-identifier="MANIFEST1"
-xsi:schemaLocation="
-http://www.imsglobal.org/xsd/imscp_v1p1 http://www.imsglobal.org/xsd/imscp_v1p1.xsd
-http://www.imsglobal.org/xsd/imsmd_v1p2 http://www.imsglobal.org/xsd/imsmd_v1p2p4.xsd
-http://www.imsglobal.org/xsd/imsqti_metadata_v2p1 http://www.imsglobal.org/xsd/qti/qtiv2p1/imsqti_metadata_v2p1.xsd">
-<metadata>
-<schema>QTIv2.1 Package</schema>
-<schemaversion>1.0.0</schemaversion>
-</metadata>
+    manifest = '''<manifest xmlns="http://www.imsglobal.org/xsd/imscp_v1p1"
+  xmlns:imsmd="http://www.imsglobal.org/xsd/imsmd_v1p2"
+  xmlns:imsqti="http://www.imsglobal.org/xsd/imsqti_metadata_v2p1"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  identifier="MANIFEST1"
+  xsi:schemaLocation="http://www.imsglobal.org/xsd/imscp_v1p1 http://www.imsglobal.org/xsd/imscp_v1p1.xsd">
+<metadata><schema>QTIv2.1 Package</schema><schemaversion>1.0.0</schemaversion></metadata>
 <organizations/>
 <resources>
 '''
