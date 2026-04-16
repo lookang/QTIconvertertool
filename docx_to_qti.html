@@ -579,6 +579,18 @@
       <li><a href="samples/questions2_tested_by_harley.zip" download>questions2_tested_by_harley.zip</a> — Word auto-list MCQ (numPr / numbering.xml format)</li>
     </ul>
 
+    <h2>Tutorial Video</h2>
+    <div style="position:relative;padding-bottom:56.25%;height:0;overflow:hidden;border-radius:10px;box-shadow:0 2px 12px rgba(0,0,0,.15);margin-bottom:24px;">
+      <iframe
+        src="https://www.youtube.com/embed/0KFOVRdJfX0"
+        title="DOCX to QTI Converter — How to use"
+        frameborder="0"
+        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+        allowfullscreen
+        style="position:absolute;top:0;left:0;width:100%;height:100%;border-radius:10px;">
+      </iframe>
+    </div>
+
     <h2>Resources</h2>
     <ul>
       <li>
@@ -1168,6 +1180,13 @@ function* iterBlockItems(body) {
         // Skip deleted-text runs
         if (run.getElementsByTagNameNS(W,'del').length) continue;
 
+        // OLE MathType/object runs often have no text payload.
+        // Emit a LaTeX placeholder so SLS can still render math text context.
+        if (run.getElementsByTagNameNS(W,'object').length) {
+          parts.push('$$\\\\text{[equation]}$$');
+          continue;
+        }
+
         let text = Array.from(run.getElementsByTagNameNS(W,'t'))
                         .map(t => t.textContent).join('');
         if (!text) continue;
@@ -1254,6 +1273,10 @@ function* iterBlockItems(body) {
             for (const run of para.getElementsByTagNameNS(W,'r')) {
               if (cellDrawingRunSet.has(run)) continue;  // skip diagram/shape label text
               if (run.getElementsByTagNameNS(W,'del').length) continue;
+              if (run.getElementsByTagNameNS(W,'object').length) {
+                runParts.push('$$\\\\text{[equation]}$$');
+                continue;
+              }
               let text = Array.from(run.getElementsByTagNameNS(W,'t'))
                               .map(t => t.textContent).join('');
               if (!text) continue;
@@ -1564,6 +1587,8 @@ async function parseDocxToQuestions(file, msAnswers) {
   // Requires at least one whitespace after the delimiter to avoid matching
   // decimal numbers like "1.2" or sub-question labels like "1(a)".
   const Q_RE        = /^(?:[Qq](\d+)(?:[\.\)\s:]*\s+)?|\((\d+)\)|（(\d+)）|(\d+)(?:[.)]\s+|\s+))([\s\S]+)/;
+  // e.g. "2(a)Write ..." or "2 (a) Write ..."
+  const Q_SUBSTART_RE = /^(\d+)\s*\(([a-zA-Z])\)\s*([\s\S]*)$/;
   // Options: A./A) uppercase letters
   // OR ⑴⑵⑶⑷ circled bracket numbers (U+2474 - U+247B)
   // OR ①②③④ circled solid numbers (U+2460 - U+2467)
@@ -1572,6 +1597,8 @@ async function parseDocxToQuestions(file, msAnswers) {
   const OPT_RE      = /^(?:[A-H][\.\)]\s*|[\u2474-\u247B]\s*|[\u2460-\u2467]\s*|[（(]\s*[1-8]\s*[）)]\s*|[1-8][\.\)．]\s*)(.*)/;
   const OPTIONS_HEADER_RE = /^(?:options|choices)(?:\s*[:：])?$/i;
   const STANDALONE_OPTION_LABEL_RE = /^[A-D]$/i;
+  const INLINE_CLOZE_RE = /[Qq](\d{1,3})\s*[（(]([^）)]*)[）)]/u;
+  const SECTION_HEADING_RE = /[一二三四五六七八九十]+、/u;
   // Allow up to 5 uppercase-letter prefix (Word cross-ref codes like "XX23")
   const QNUM_ONLY   = /^[A-Z]{0,5}(\d{1,3})$/;   // table first-cell
   const OPT_CELL_RE = /^([A-D])\s+(.*)/i;  // 'A   text' in a table options row
@@ -1656,6 +1683,77 @@ async function parseDocxToQuestions(file, msAnswers) {
     });
     if (opts.every(opt => opt !== null)) return opts;
     return null;
+  }
+
+  // Parse inline cloze options like "1 肯定 2 挑选 3 安排 4选择".
+  function parseInlineClozeOptions(innerTxt) {
+    const matches = [...innerTxt.matchAll(/[1-8]\s*([\u4e00-\u9fffA-Za-z][\u4e00-\u9fffA-Za-z0-9_\- ]*?)(?=\s*[1-8]\s*[\u4e00-\u9fffA-Za-z]|$)/gu)];
+    return matches
+      .map(m => (m[1] || '').trim().replace(/^[\s\W_]+|[\s\W_]+$/g, ''))
+      .filter(Boolean);
+  }
+
+  function trimAfterSectionHeading(text) {
+    if (!text) return '';
+    const m = text.match(SECTION_HEADING_RE);
+    if (m && m.index > 0) return text.slice(0, m.index).trim();
+    return text.trim();
+  }
+
+  // For consecutive inline cloze MCQs (e.g. Q16-Q20 in one passage),
+  // rebuild each question stem as the full shared passage.
+  function normalizeInlineClozeGroups(mcqList) {
+    const byNum = new Map();
+    for (const q of mcqList) {
+      if (!q || !q.options || !q.options.length) continue;
+      const stemText = (q.tokens || [])
+        .filter(t => t.type === 'text')
+        .map(t => t.value || '')
+        .join(' ')
+        .trim();
+      const m = stemText.match(INLINE_CLOZE_RE);
+      if (!m) continue;
+
+      const parsedOpts = parseInlineClozeOptions((m[2] || '').trim());
+      if (parsedOpts.length >= 2 && parsedOpts.length <= 8) {
+        q.options = parsedOpts;
+      }
+      byNum.set(parseInt(q.qnum, 10), q);
+    }
+    if (byNum.size === 0) return;
+
+    const nums = [...byNum.keys()].sort((a, b) => a - b);
+    const groups = [];
+    let group = [nums[0]];
+    for (const n of nums.slice(1)) {
+      if (n === group[group.length - 1] + 1) group.push(n);
+      else { groups.push(group); group = [n]; }
+    }
+    groups.push(group);
+
+    for (const g of groups) {
+      if (g.length < 2) continue;
+      const stems = [];
+      for (const n of g) {
+        const q = byNum.get(n);
+        const txt = trimAfterSectionHeading(
+          (q.tokens || [])
+            .filter(t => t.type === 'text')
+            .map(t => t.value || '')
+            .join(' ')
+        ).replace(/\s+/g, ' ').trim();
+        if (txt && !stems.includes(txt)) stems.push(txt);
+      }
+      if (!stems.length) continue;
+
+      const sharedPassage = stems.join('\n')
+        .replace(/[Qq](\d{1,3})\s*[（(][^）)]*[）)]/gu, (_m, qn) => `Q${qn}______`);
+
+      for (const n of g) {
+        const q = byNum.get(n);
+        q.tokens = [{ type: 'text', value: sharedPassage }];
+      }
+    }
   }
 
   // ── Detect transposed options: A B C D appear as column headers ─────
@@ -1980,6 +2078,21 @@ async function parseDocxToQuestions(file, msAnswers) {
           continue;
         }
       }
+
+      // Question-start variant like "2(a)Write ...". We treat this as a new
+      // top-level question (qnum=2) and keep "(a) ..." in the stem text.
+      const qSubMatch = plain.match(Q_SUBSTART_RE);
+      if (qSubMatch && parseInt(qSubMatch[1]) <= MAX_QNUM) {
+        const qnum = qSubMatch[1];
+        const qbody = `(${qSubMatch[2]}) ${qSubMatch[3] || ''}`.trim();
+        flushQuestion();           // resets inSuggestedAnswer
+        curQ    = { qnum, tokens: [] };
+        curOpts = []; curOptImages = [];
+        curQFromText = true;
+        curQ.tokens.push({ type:'text', value: qbody || raw });
+        continue;
+      }
+
       const qMatch = plain.match(Q_RE);
       if (qMatch) {
         // Group layout: Q-prefix "Q1 text" → groups [1]=num
@@ -1999,8 +2112,9 @@ async function parseDocxToQuestions(file, msAnswers) {
                         || qtext;
           curQ.tokens.push({ type:'text', value: bodyText });
           continue;
+        }
       }
-      
+
       // Inline Q-prefix for fill-in-the-blank style questions (e.g. Q16(...) or conversational Q26？)
       // Make sure it's not matching instruction ranges like "Q1-Q2"
       const rangeMatch = plain.match(/[Qq]\d+\s*[-－到至\u2013\u2014]\s*[Qq]\d+/);
@@ -2015,20 +2129,25 @@ async function parseDocxToQuestions(file, msAnswers) {
           curQ.tokens.push({ type: 'text', value: raw });
 
           // Try to extract inline options: e.g. Q16（1 肯定 2 挑选 3 安排 4选择）
-          const clozeMatch = plain.match(/[Qq]\d{1,3}\s*[（\(](.*?)[）\)]/);
+          // Handles both "1 word" (space) and "1word" (no space) formats.
+          const clozeMatch = plain.match(/[Qq]\d{1,3}\s*[（(]([^）)]+)[）)]/u);
           if (clozeMatch) {
               const innerTxt = clozeMatch[1].trim();
-              const optionParts = innerTxt.split(/(?:^|\s+)[a-hA-H1-8][\.\)\s]+/i).filter(Boolean);
+              const optionParts = parseInlineClozeOptions(innerTxt);
               if (optionParts.length >= 2 && optionParts.length <= 8) {
                   for (const o of optionParts) {
-                     curOpts.push(o.trim());
+                     curOpts.push(o);
                      curOptImages.push(null);
                   }
+                  // Replace the option list in the stem with a clean blank so students
+                  // see the sentence context rather than the raw options list.
+                  // e.g. "Q16（1 肯定 2 挑选 3 安排 4选择）" → "______"
+                  const stemRaw = raw.replace(/[Qq]\d{1,3}\s*[（(][^）)]*[）)]/u, '______');
+                  curQ.tokens[curQ.tokens.length - 1] = { type: 'text', value: stemRaw };
               }
           }
           continue;
       }
-    }
     }
 
     // ── Answer-section delimiter (e.g. "Suggested Answer", "Marking Scheme") ──
@@ -2106,6 +2225,7 @@ async function parseDocxToQuestions(file, msAnswers) {
   // Flush last answer + question
   if (curAQ !== null) inlineAnswers[curAQ] = curATokens;
   flushQuestion();
+  normalizeInlineClozeGroups(mcq);
 
   const totalQ = mcq.length + structured.length;
   if (totalQ === 0)
@@ -2128,6 +2248,31 @@ async function parseDocxToQuestions(file, msAnswers) {
       // suggestedAnswerText (auto-extracted from doc) takes priority over MS file / inline answers
       answer: q.suggestedAnswerText || resolveAnswer(q.qnum)
     }));
+
+  // Safety pass: if an item was parsed as Essay but contains inline cloze
+  // syntax (e.g. "Q16（1 ... 2 ... 3 ... 4 ...）"), auto-promote it to MCQ
+  // so the editor shows Options A/B/C/D and a correct-answer selector.
+  for (const entry of allQuestions) {
+    if (entry.isMcq) continue;
+    const stemPlain = (entry.q.tokens || [])
+      .filter(t => t.type === 'text')
+      .map(t => stripTags(t.value || ''))
+      .join(' ');
+    const m = stemPlain.match(INLINE_CLOZE_RE);
+    if (!m) continue;
+
+    const parsedOpts = parseInlineClozeOptions((m[2] || '').trim());
+    const optCount = Math.max(2, Math.min(parsedOpts.length || 4, LETTERS.length));
+    entry.isMcq = true;
+    entry.q.options = parsedOpts.length ? parsedOpts : Array(optCount).fill('');
+    entry.q.optionImages = entry.q.options.map(() => null);
+
+    const ans = String(entry.answer || '').trim();
+    const letterMatch = ans.match(/^([A-Da-d])$/);
+    const numMatch = ans.match(/^([1-4])$/);
+    if (letterMatch) entry.answer = letterMatch[1].toLowerCase();
+    else if (numMatch) entry.answer = LETTERS[parseInt(numMatch[1], 10) - 1];
+  }
 
   return { allQuestions, resolvedImages };
 }
