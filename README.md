@@ -1,6 +1,28 @@
 # QTI Converter Tool
 
-Convert Singapore Physics prelim exam papers (Word `.docx`) into IMS QTI 2.1 packages ready to import into any standards-compliant LMS (Moodle, Canvas, Blackboard, etc.).
+Convert Singapore exam papers (Word `.docx`) into IMS QTI 2.1 packages ready to import into **Student Learning Space (SLS)** and any standards-compliant LMS.
+
+---
+
+## 🎬 Tutorial
+
+<div align="center">
+  <a href="https://www.youtube.com/watch?v=0KFOVRdJfX0" target="_blank">
+    <img src="https://img.youtube.com/vi/0KFOVRdJfX0/maxresdefault.jpg"
+         alt="Watch: DOCX to QTI Converter — How to use"
+         width="720">
+  </a>
+  <br><br>
+  <a href="https://www.youtube.com/watch?v=0KFOVRdJfX0" target="_blank">
+    <img src="https://img.shields.io/badge/▶%20Watch%20on%20YouTube-FF0000?style=for-the-badge&logo=youtube&logoColor=white"
+         alt="Watch on YouTube">
+  </a>
+  &nbsp;
+  <a href="https://iwant2study.org/lookangejss/QTIlowJunHua/docx_to_qti.html" target="_blank">
+    <img src="https://img.shields.io/badge/🚀%20Try%20Live%20Demo-4F46E5?style=for-the-badge"
+         alt="Try Live Demo">
+  </a>
+</div>
 
 ---
 
