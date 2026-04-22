@@ -141,6 +141,56 @@
       font-size: 15px; color: #0c4a6e; line-height: 1.7;
     }
 
+    /* ── FAQ section ─────────────────────────────────────────────────── */
+    .faq-section {
+      margin-top: 48px; padding-top: 36px;
+      border-top: 2px solid #e5e7eb;
+    }
+    .faq-section h2 {
+      font-size: 22px; margin: 0 0 6px;
+      color: #111827;
+    }
+    .faq-section .faq-subtitle {
+      font-size: 14px; color: #6b7280; margin: 0 0 22px;
+    }
+    .faq-item {
+      border: 1.5px solid #e5e7eb;
+      border-radius: 10px;
+      margin-bottom: 10px;
+      overflow: hidden;
+      transition: box-shadow .15s;
+    }
+    .faq-item:hover { box-shadow: 0 2px 10px rgba(0,0,0,.07); }
+    .faq-item summary {
+      display: flex; align-items: center; gap: 12px;
+      padding: 16px 18px;
+      font-size: 15px; font-weight: 600; color: #1e3a8a;
+      cursor: pointer; list-style: none;
+      background: #f8faff;
+    }
+    .faq-item summary::-webkit-details-marker { display: none; }
+    .faq-item summary::before {
+      content: '＋'; font-size: 18px; font-weight: 400;
+      color: #3b82f6; flex-shrink: 0; transition: transform .2s;
+    }
+    .faq-item[open] summary::before { content: '－'; }
+    .faq-item[open] summary { background: #eff6ff; }
+    .faq-body {
+      padding: 16px 20px 18px 48px;
+      font-size: 14.5px; color: #374151; line-height: 1.75;
+    }
+    .faq-body p { margin: 0 0 12px; }
+    .faq-body p:last-child { margin: 0; }
+    .faq-body ul { margin: 6px 0 12px; padding-left: 20px; }
+    .faq-body li { margin-bottom: 6px; }
+    .faq-tag {
+      display: inline-block; font-size: 11px; font-weight: 700;
+      padding: 2px 8px; border-radius: 20px; vertical-align: middle;
+      margin-left: 4px; letter-spacing: .2px;
+    }
+    .faq-tag.platform { background: #fef9c3; color: #854d0e; }
+    .faq-tag.workaround { background: #dcfce7; color: #15803d; }
+
     /* ── Quick-load dev bar ──────────────────────────────────────────── */
     #quickLoad {
       margin-top: 18px; padding: 12px 14px;
@@ -2640,6 +2690,71 @@ document.getElementById('resetBtn').addEventListener('click', () => {
   window.scrollTo({ top: 0, behavior: 'smooth' });
 });
 </script>
+<div class="container">
+  <div class="faq-section">
+    <h2>❓ Frequently Asked Questions</h2>
+    <p class="faq-subtitle">Common questions from teachers using this converter with SLS.</p>
+
+    <details class="faq-item">
+      <summary>Why do multipart questions get split into separate questions after import?</summary>
+      <div class="faq-body">
+        <p>
+          This is a fundamental limitation of the QTI 2.1 standard, not specific to this converter.
+          <strong>QTI does not have a native multipart question format.</strong>
+          Every item in a QTI package must be a self-contained, standalone question.
+        </p>
+        <p>
+          As a result, each part of a multipart question is exported as its own separate QTI item.
+          To keep things coherent, the shared stimulus (the common passage or scenario) and the
+          part label (e.g. "Part (a)") are repeated in each item's prompt — the same approach
+          used by other QTI converters such as GetMarked.
+        </p>
+        <p><strong>What this means in SLS:</strong></p>
+        <ul>
+          <li>Each sub-part will appear as an independent question in the SLS quiz.</li>
+          <li>The stimulus text is duplicated across parts — some manual cleanup in SLS may be needed.</li>
+          <li>Grouping or nesting sub-questions under a parent question must be done manually in SLS after import.</li>
+        </ul>
+        <p>
+          <span class="faq-tag platform">QTI 2.1 constraint</span>
+          <span class="faq-tag workaround">Workaround: reorganise in SLS after import</span>
+        </p>
+      </div>
+    </details>
+
+    <details class="faq-item">
+      <summary>Why doesn't SLS show the model answers after importing the QTI file?</summary>
+      <div class="faq-body">
+        <p>
+          For <strong>MCQ questions</strong>, correct answers are included in the QTI package
+          as <code>&lt;correctResponse&gt;</code> elements and are successfully ingested by SLS
+          during import — no additional setup is needed for MCQ.
+        </p>
+        <p>
+          For <strong>essay / structured questions</strong>, SLS currently does not ingest
+          answer data from QTI files during import, even when that data is present in the package.
+          This is a <strong>platform-side limitation of SLS</strong>, not a problem with the converter.
+          The same behaviour has been confirmed by other QTI converters (including GetMarked).
+        </p>
+        <p><strong>What this means in practice:</strong></p>
+        <ul>
+          <li>MCQ correct answers → imported automatically ✔</li>
+          <li>Essay / structured suggested answers → must be added manually in SLS after import ✘</li>
+        </ul>
+        <p>
+          The converter embeds suggested answer text in the QTI XML for completeness, but SLS
+          will not display it until MOE adds support for ingesting essay answer data from QTI.
+        </p>
+        <p>
+          <span class="faq-tag platform">SLS platform limitation</span>
+          <span class="faq-tag workaround">Workaround: add answers manually in SLS</span>
+        </p>
+      </div>
+    </details>
+
+  </div>
+</div>
+
 <footer style="text-align:center; padding: 16px 0 10px; color: #999; font-size: 0.78rem; font-family: sans-serif;">
   Last updated: Saturday, 12 April 2026, 12:00 PM
 </footer>
