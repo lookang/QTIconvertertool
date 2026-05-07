@@ -623,10 +623,19 @@
         </span>
       </li>
     </ul>
+    <p style="color:#555;font-size:13px;margin-top:12px;margin-bottom:6px"><strong>Singapore Chinese Primary 6 revision worksheets &mdash; contributed by Ji Lin:</strong></p>
+    <ul>
+      <li><a href="samples/2020 P6 CL SA1 Revision 1.zip" download>2020 P6 CL SA1 Revision 1.zip</a> - Primary 6 Chinese SA1 revision sample QTI package</li>
+    </ul>
     <p style="color:#555;font-size:13px;margin-top:12px;margin-bottom:6px"><strong>Simple test samples (demonstrating different DOCX formats):</strong></p>
     <ul>
       <li><a href="samples/questions_tested_lawrence.zip" download>questions_tested_lawrence.zip</a> — inline-numbered MCQ ("1. text" / "a. option" format)</li>
       <li><a href="samples/questions2_tested_by_harley.zip" download>questions2_tested_by_harley.zip</a> — Word auto-list MCQ (numPr / numbering.xml format)</li>
+    </ul>
+
+    <p style="color:#555;font-size:13px;margin-top:12px;margin-bottom:6px"><strong>Singapore Primary 6 Mathematics papers &mdash; contributed by Safiah:</strong></p>
+    <ul>
+      <li><a href="samples/2024 OPS P6 FMA CT1 1A.zip" download>2024 OPS P6 FMA CT1 1A.zip</a> - Primary 6 Foundation Mathematics CT1 sample with MCQ options and answer key</li>
     </ul>
 
     <h2>Tutorial Video</h2>
@@ -1068,6 +1077,31 @@ function extractTables(xmlDoc) {
   return tables;
 }
 
+function normalizeMcqAnswerValue(raw) {
+  let compact = stripTags(String(raw || ''))
+    .replace(/\u3000/g, '')
+    .replace(/\s+/g, '')
+    .toUpperCase();
+  if (!compact) return null;
+
+  if (/^[ABCD]$/.test(compact)) return compact.toLowerCase();
+
+  const circledMap = {
+    '①': '1', '②': '2', '③': '3', '④': '4',
+    '⑴': '1', '⑵': '2', '⑶': '3', '⑷': '4'
+  };
+  compact = circledMap[compact] || compact;
+
+  if (/^[（(]/.test(compact)) compact = compact.slice(1);
+  if (/[）).．]$/.test(compact)) compact = compact.slice(0, -1);
+
+  if (/^[1-4]$/.test(compact)) {
+    return String.fromCharCode(96 + parseInt(compact, 10));
+  }
+
+  return null;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // MARK-SCHEME PARSER
 // Returns { qnum_str: answer_str }
@@ -1089,18 +1123,18 @@ async function parseMarkScheme(msFile) {
   for (const table of tables) {
     for (let r = 0; r < table.length; r++) {
       for (let c = 0; c < table[r].length; c++) {
-        const cell = (table[r][c] || '').trim().toUpperCase();
+        const cell = (table[r][c] || '').trim();
         // Match Q-number (e.g. "1", "01", "Q1", "Q01")
-        const mQ = cell.match(/^[Q]?0*(\d+)$/);
+        const mQ = cell.match(/^[Qq]?0*(\d+)$/);
         if (mQ) {
           const qnStr = mQ[1];
           let foundAns = false;
 
           // Check right cell (column-style)
           if (c + 1 < table[r].length) {
-            const right = (table[r][c+1] || '').trim().toUpperCase();
-            if (/^[ABCD]$/.test(right)) { answers[qnStr] = right.toLowerCase(); foundAns = true; }
-            else if (/^[1234]$/.test(right)) { answers[qnStr] = String.fromCharCode(96 + parseInt(right)); foundAns = true; }
+            const right = (table[r][c+1] || '').trim();
+            const rightMcq = normalizeMcqAnswerValue(right);
+            if (rightMcq) { answers[qnStr] = rightMcq; foundAns = true; }
             else if (right.length > 0) {
               // Could be structured answer test (e.g. "Q34" -> "This is the answer")
               if (answers[qnStr] && answers[qnStr].length > 1) answers[qnStr] += '\n' + right;
@@ -1112,9 +1146,9 @@ async function parseMarkScheme(msFile) {
           // Check bottom cell (row-style) 
           // Only check bottom if we didn't find a clean right answer, or if we want to catch alternating rows
           if (!foundAns && r + 1 < table.length) {
-            const bottom = (table[r+1][c] || '').trim().toUpperCase();
-            if (/^[ABCD]$/.test(bottom)) { answers[qnStr] = bottom.toLowerCase(); foundAns = true; }
-            else if (/^[1234]$/.test(bottom)) { answers[qnStr] = String.fromCharCode(96 + parseInt(bottom)); foundAns = true; }
+            const bottom = (table[r+1][c] || '').trim();
+            const bottomMcq = normalizeMcqAnswerValue(bottom);
+            if (bottomMcq) { answers[qnStr] = bottomMcq; foundAns = true; }
           }
         } else {
           // Check for structured like "Q34: answer" inside a single cell
@@ -1146,9 +1180,8 @@ async function parseMarkScheme(msFile) {
 
     if (qnum) {
       let isMcq = false;
-      const cleanAns = ansText.toUpperCase().replace(/\./g, '').trim();
-      if (/^[ABCD]$/.test(cleanAns)) { ansText = cleanAns.toLowerCase(); isMcq = true; }
-      else if (/^[1234]$/.test(cleanAns)) { ansText = String.fromCharCode(96 + parseInt(cleanAns)); isMcq = true; }
+      const normalizedAns = normalizeMcqAnswerValue(ansText);
+      if (normalizedAns) { ansText = normalizedAns; isMcq = true; }
       
       // Protect existing single-letter MCQ answers from being overwritten by false paragraph hits
       if (answers[qnum] && /^[a-d]$/.test(answers[qnum])) {
@@ -1172,6 +1205,151 @@ async function parseMarkScheme(msFile) {
 
   return answers;
 }
+
+async function parseMarkSchemeEnhanced(msFile) {
+  const buf = await msFile.arrayBuffer();
+  const zip = await JSZip.loadAsync(buf);
+  const parser = new DOMParser();
+
+  const docStr = await zip.file('word/document.xml').async('string');
+  const xmlDoc = parser.parseFromString(docStr, 'application/xml');
+
+  const answers = {};
+  const appendStructuredAnswer = (qnum, label, text) => {
+    if (!text) return;
+    const entry = `${label}: ${text}`;
+    if (answers[qnum] && !/^[a-d]$/.test(answers[qnum])) {
+      if (!answers[qnum].includes(entry)) answers[qnum] += '\n' + entry;
+    } else {
+      answers[qnum] = entry;
+    }
+  };
+
+  const tables = extractTables(xmlDoc);
+  if (tables.length) {
+    const first = tables[0];
+    const firstCell = first[0] && first[0][0] ? first[0][0].trim() : '';
+    const maxCols = first.reduce((max, row) => Math.max(max, row.length), 0);
+
+    if (first.length >= 6 && maxCols >= 10 && /^[Qq]?0*\d+$/.test(firstCell)) {
+      for (let r = 0; r + 1 < first.length; r += 2) {
+        const qRow = first[r] || [];
+        const aRow = first[r + 1] || [];
+        for (let c = 0; c < Math.min(qRow.length, aRow.length); c++) {
+          const qMatch = (qRow[c] || '').trim().match(/^[Qq]?0*(\d+)$/);
+          const ans = normalizeMcqAnswerValue(aRow[c]);
+          const qnNum = qMatch ? parseInt(qMatch[1], 10) : 0;
+          if (qMatch && ans && qnNum > 0) answers[String(qnNum)] = ans;
+        }
+      }
+      return answers;
+    }
+  }
+
+  for (const table of tables) {
+    for (const row of table) {
+      const cells = row.map(cell => String(cell || '').trim());
+      if (!cells.some(Boolean)) continue;
+
+      let pairedAnswers = 0;
+      for (let c = 0; c + 1 < cells.length; c += 2) {
+        const qMatch = cells[c].match(/^[Qq]?0*(\d+)$/);
+        const ans = normalizeMcqAnswerValue(cells[c + 1]);
+        const qnNum = qMatch ? parseInt(qMatch[1], 10) : 0;
+        if (qMatch && ans && qnNum > 0) {
+          answers[String(qnNum)] = ans;
+          pairedAnswers += 1;
+        }
+      }
+      if (pairedAnswers) continue;
+
+      if (cells.length >= 2) {
+        const label = cells[0];
+        const text = cells[1];
+        const structuredMatch = label.match(/^[Qq]?0*(\d+)(.*)$/);
+        if (structuredMatch && text) {
+          const qnNum = parseInt(structuredMatch[1], 10);
+          if (!(qnNum > 0)) continue;
+          const qnStr = String(qnNum);
+          const suffix = (structuredMatch[2] || '').trim();
+          const inlineMcq = normalizeMcqAnswerValue(text);
+          if (inlineMcq && !suffix) {
+            answers[qnStr] = inlineMcq;
+            continue;
+          }
+          appendStructuredAnswer(qnStr, label, text);
+          continue;
+        }
+      }
+
+      for (let c = 0; c < cells.length; c++) {
+        const cell = cells[c];
+        const qMatch = cell.match(/^[Qq]?0*(\d+)$/);
+        if (qMatch) {
+          const qnNum = parseInt(qMatch[1], 10);
+          if (!(qnNum > 0)) continue;
+          const qnStr = String(qnNum);
+          const right = c + 1 < cells.length ? cells[c + 1] : '';
+          const rightMcq = normalizeMcqAnswerValue(right);
+          if (rightMcq) {
+            answers[qnStr] = rightMcq;
+            continue;
+          }
+          if (right.length > 0 && !/^answer$/i.test(right)) {
+            answers[qnStr] = right;
+            continue;
+          }
+        } else {
+          const structMatch = cell.match(/^[Qq]?0*(\d+)[.:ï¼š]\s*(.*)/i);
+          if (structMatch) {
+            const qnStr = structMatch[1];
+            const text = structMatch[2].trim();
+            if (text) answers[qnStr] = text;
+          }
+        }
+      }
+    }
+  }
+
+  let currentQnum = null;
+  const paras = Array.from(xmlDoc.getElementsByTagNameNS(W, 'p'));
+  for (const p of paras) {
+    const pt = Array.from(p.getElementsByTagNameNS(W, 't')).map(t => t.textContent).join('').trim();
+    if (!pt) continue;
+
+    let qnum = null;
+    let ansText = "";
+    const m1 = pt.match(/^[Qq]0*(\d+)[.:ï¼š\s]*(.*)/);
+    const m2 = pt.match(/^0*(\d+)[.:ï¼š]+\s*(.*)/);
+    if (m1) { qnum = m1[1]; ansText = m1[2].trim(); }
+    else if (m2) { qnum = m2[1]; ansText = m2[2].trim(); }
+    if (qnum && parseInt(qnum, 10) === 0) qnum = null;
+
+    if (qnum) {
+      let isMcq = false;
+      const normalizedAns = normalizeMcqAnswerValue(ansText);
+      if (normalizedAns) { ansText = normalizedAns; isMcq = true; }
+
+      if (answers[qnum] && /^[a-d]$/.test(answers[qnum])) {
+        if (isMcq) answers[qnum] = ansText;
+        currentQnum = null;
+        continue;
+      }
+
+      if (answers[qnum] && answers[qnum].length > 1 && !isMcq && answers[qnum] !== ansText) {
+        if (!answers[qnum].includes(ansText)) answers[qnum] += '\n' + pt;
+      } else {
+        answers[qnum] = ansText || pt;
+      }
+      currentQnum = isMcq ? null : qnum;
+    } else if (currentQnum && answers[currentQnum]) {
+      answers[currentQnum] += '\n' + pt;
+    }
+  }
+
+  return answers;
+}
+parseMarkScheme = parseMarkSchemeEnhanced;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Iterate body children → yield {type, value}
@@ -1438,9 +1616,28 @@ const QTI_NS  = 'http://www.imsglobal.org/xsd/imsqti_v2p1';
 const QTI_XSD = 'http://www.imsglobal.org/xsd/imsqti_v2p1 http://www.imsglobal.org/xsd/qti/qtiv2p1/imsqti_v2p1.xsd';
 const LETTERS = ['a','b','c','d','e','f'];
 
+function pickMcqTitleText(tokens) {
+  const candidates = (tokens || [])
+    .filter(t => t.type === 'text')
+    .map(t => stripTags(t.value || '').trim())
+    .filter(Boolean);
+
+  for (const candidate of candidates) {
+    if (candidate.includes('______') || candidate.includes('＿＿＿') || candidate.includes('(      )') || candidate.includes('(       )')) {
+      return candidate.slice(0, 70);
+    }
+  }
+  for (const candidate of candidates) {
+    if (candidate.includes('?') || candidate.includes('？')) {
+      return candidate.slice(0, 70);
+    }
+  }
+  return (candidates[candidates.length - 1] || '').slice(0, 70);
+}
+
 function mcqItemXml(q, answerText) {
   const id  = `Q${pad3(q.qnum)}_${randomId()}`;
-  const ttl = escXml(stripTags(q.tokens.find(t=>t.type==='text')?.value||'').slice(0,70));
+  const ttl = escXml(pickMcqTitleText(q.tokens));
   // Only emit <correctResponse> when answerText is a valid simpleChoice identifier
   // (a–f).  An empty string or "None" is not a valid QTI identifier and causes
   // SLS to reject the entire ZIP with "Processing unsuccessful".
@@ -1646,12 +1843,14 @@ async function parseDocxToQuestions(file, msAnswers) {
   // OR 1) / 1. / 1． numeric option labels
   const OPT_RE      = /^(?:[A-H][\.\)]\s*|[\u2474-\u247B]\s*|[\u2460-\u2467]\s*|[（(]\s*[1-8]\s*[）)]\s*|[1-8][\.\)．]\s*)(.*)/;
   const OPTIONS_HEADER_RE = /^(?:options|choices)(?:\s*[:：])?$/i;
-  const STANDALONE_OPTION_LABEL_RE = /^[A-D]$/i;
-  const INLINE_CLOZE_RE = /[Qq](\d{1,3})\s*[（(]([^）)]*)[）)]/u;
+  const STANDALONE_OPTION_LABEL_RE = /^(?:[A-D]|[（(]\s*[1-8]\s*[）)]|[1-8][\.\)．]|[\u2474-\u247B]|[\u2460-\u2467])$/i;
+  const NUMBERED_SPLIT_OPTION_LABEL_RE = /^(?:[（(]\s*[1-8]\s*[）)]|[1-8][\.\)．]|[\u2474-\u247B]|[\u2460-\u2467])$/i;
+  const INLINE_CLOZE_RE = /[Qq](\d{1,3})\s*[＿_\s]*[（(]([^）)]*)[）)]/u;
   const SECTION_HEADING_RE = /[一二三四五六七八九十]+、/u;
   // Allow up to 5 uppercase-letter prefix (Word cross-ref codes like "XX23")
-  const QNUM_ONLY   = /^[A-Z]{0,5}(\d{1,3})$/;   // table first-cell
+  const QNUM_ONLY   = /^[A-Z]{0,5}(\d{1,3})$/i;   // table first-cell
   const OPT_CELL_RE = /^([A-D])\s+(.*)/i;  // 'A   text' in a table options row
+  const ANSWER_BLANK_RE = /^[\(\（][\s_＿]*[\)\）]$/;
   const ANS_RE      = /^ANSWERS\s*$/i;
   const MAX_QNUM    = 200;   // ignore numbers > this (e.g. the year "2022")
 
@@ -1669,10 +1868,69 @@ async function parseDocxToQuestions(file, msAnswers) {
   // Parse question number from table first-cell (normalises 'XX23' → '23')
   // Also strips HTML tags e.g. '<strong>1</strong>' → '1'
   function parseQnum(cell) {
-    const clean = (cell || '').replace(/<[^>]+>/g, '').trim();
+    const clean = (cell || '').replace(/<[^>]+>/g, '').replace(/\s+/g, '').trim();
     const m = QNUM_ONLY.exec(clean);
     if (m && parseInt(m[1]) <= MAX_QNUM) return m[1];
     return null;
+  }
+
+  function isAnswerBlank(text) {
+    const compact = (text || '').replace(/<[^>]+>/g, '').replace(/\u3000/g, ' ').trim();
+    return !!compact && ANSWER_BLANK_RE.test(compact);
+  }
+
+  function findQnumInRow(row) {
+    for (let i = 0; i < row.length; i++) {
+      const plain = cellPlainText(row[i]);
+      if (!plain) continue;
+      if (STANDALONE_OPTION_LABEL_RE.test(plain)) return { qnum: null, idx: -1 };
+      const qnum = parseQnum(plain);
+      if (qnum !== null) return { qnum, idx: i };
+      return { qnum: null, idx: -1 };
+    }
+    return { qnum: null, idx: -1 };
+  }
+
+  function extractUnlabeledOption(row) {
+    if (!row || ((row[0] || '').replace(/<[^>]+>/g, '').trim())) return null;
+    const uniqueTail = [];
+    const seen = new Set();
+    for (const cell of row.slice(1)) {
+      const trimmed = (cell || '').trim();
+      const plain   = trimmed.replace(/<[^>]+>/g, '').trim();
+      if (!plain || seen.has(plain)) continue;
+      seen.add(plain);
+      uniqueTail.push(trimmed);
+    }
+    if (uniqueTail.length !== 1) return null;
+    const candidate = uniqueTail[0];
+    if (isAnswerBlank(candidate) || parseQnum(candidate) !== null) return null;
+    return candidate;
+  }
+
+  function escapeRegExp(text) {
+    return String(text).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }
+
+  function extractInlineOptionsForQuestion(tokens, qnum) {
+    const text = (tokens || [])
+      .filter(t => t.type === 'text')
+      .map(t => stripTags(t.value || ''))
+      .join(' ');
+    const re = new RegExp(`[Qq]${escapeRegExp(qnum)}[＿_\\s]*[（(]([^）)]*)[）)]`, 'u');
+    const m = text.match(re);
+    if (!m) return [];
+    const parsed = parseInlineClozeOptions((m[1] || '').trim());
+    return (parsed.length >= 2 && parsed.length <= 8) ? parsed : [];
+  }
+
+  function stripInlineOptionsFromTokens(tokens, qnum) {
+    const re = new RegExp(`([Qq]${escapeRegExp(qnum)}[＿_\\s]*)[（(][^）)]*[）)]`, 'gu');
+    return (tokens || []).map(token => {
+      if (token.type !== 'text') return token;
+      const cleaned = (token.value || '').replace(re, '$1').replace(/\s{2,}/g, ' ').trim();
+      return cleaned ? { ...token, value: cleaned } : null;
+    }).filter(Boolean);
   }
 
   // Deduplicate merged Word table cells
@@ -1687,9 +1945,9 @@ async function parseDocxToQuestions(file, msAnswers) {
 
   // Extract MCQ option texts from a row like ['', 'A  text', 'B  text', ...]
   // Also handles bold option letters e.g. ['', '<strong>A</strong>  text', ...]
-  function extractOptsFromRow(row) {
-    const opts = [];
-    for (const cell of row.slice(1)) {
+function extractOptsFromRow(row) {
+  const opts = [];
+  for (const cell of row.slice(1)) {
       const t = cell.trim();
       if (!t) continue;
       // Strip HTML to check for option-letter prefix
@@ -1704,11 +1962,130 @@ async function parseDocxToQuestions(file, msAnswers) {
         opts.push(optRaw || m[2].trim());
       }
     }
-    return opts;
+  return opts;
+}
+
+function extractSplitNumberedOptionRow(row) {
+  if (!row || cellPlainText(row[0])) return null;
+  let labelIdx = -1;
+  for (let i = 1; i < row.length; i++) {
+    const plain = cellPlainText(row[i]);
+    if (!plain) continue;
+    if (!NUMBERED_SPLIT_OPTION_LABEL_RE.test(plain)) return null;
+    labelIdx = i;
+    break;
+  }
+  if (labelIdx === -1) return null;
+  return {
+    labelIdx,
+    text: dedupCells(row.slice(labelIdx + 1)).trim()
+  };
+}
+
+function cellPlainText(cell) {
+  return String(cell || '')
+    .replace(/<[^>]+>/g, '')
+    .replace(/\xa0/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function looksLikeOptionHeaderRow(row) {
+  if (!row || row.length < 3) return false;
+  if (cellPlainText(row[0])) return false;
+  const tail = row.slice(1).map(cellPlainText).filter(Boolean);
+  if (tail.length < 2) return false;
+  if (NUMBERED_SPLIT_OPTION_LABEL_RE.test(tail[0])) return false;
+  if (tail.some(t => OPT_CELL_RE.test(t))) return false;
+  if (tail.every(t => /^[A-D]$/i.test(t))) return false;
+  if (tail.some(t => isAnswerBlank(t) || parseQnum(t) !== null)) return false;
+  return true;
+}
+
+function formatOptionRowText(row, headerRow = null) {
+  const values = row.slice(1).map(cell => String(cell || '').trim());
+  const plainValues = values.map(cellPlainText);
+  if (!plainValues.some(Boolean)) return '';
+  if (headerRow && headerRow.length === row.length) {
+    const headers = headerRow.slice(1).map(cellPlainText);
+    if (headers.some(Boolean)) {
+      const parts = [];
+      for (let i = 0; i < values.length; i++) {
+        if (!plainValues[i]) continue;
+        parts.push(headers[i] ? `${headers[i]}: ${plainValues[i]}` : plainValues[i]);
+      }
+      if (parts.length) return parts.join(' ; ');
+    }
+  }
+  return dedupCells(row.slice(1));
+}
+
+function extractInlineLetteredOptionsFromHtml(htmlText) {
+  const raw = String(htmlText || '');
+  if (!raw) return null;
+
+  let plain = '';
+  const map = [];
+  let inTag = false;
+  for (let i = 0; i < raw.length; i++) {
+    const ch = raw[i];
+    if (inTag) {
+      if (ch === '>') inTag = false;
+      continue;
+    }
+    if (ch === '<') {
+      inTag = true;
+      continue;
+    }
+    plain += ch;
+    map.push(i);
   }
 
-  // Check if individual paragraphs of a question cell contain embedded A/B/C/D options
-  // as separate paragraphs (common in H1/H2 papers where options follow the stem in
+  const normalized = plain.replace(/\xa0/g, ' ');
+  const qIdx = Math.max(normalized.lastIndexOf('?'), normalized.lastIndexOf('？'));
+  if (qIdx < 0) return null;
+
+  const searchStart = qIdx + 1;
+  const tail = normalized.slice(searchStart);
+  const markerRe = /(^|[?!.;:)\]\s])([A-D])(?=\s*[A-Z0-9(<])/g;
+  const expected = ['A', 'B', 'C', 'D'];
+  const markers = [];
+  let m;
+
+  while ((m = markerRe.exec(tail)) !== null) {
+    const letter = m[2];
+    const idx = searchStart + m.index + m[1].length;
+    if (letter === 'A' && markers.length && expected[markers.length] !== 'A') {
+      markers.length = 0;
+    }
+    if (letter !== expected[markers.length]) continue;
+    markers.push({ letter, index: idx });
+    if (markers.length === 4) break;
+  }
+
+  if (markers.length !== 4) return null;
+
+  const options = [];
+  for (let i = 0; i < markers.length; i++) {
+    const start = markers[i].index + 1;
+    const end = i + 1 < markers.length ? markers[i + 1].index : normalized.length;
+    const opt = normalized.slice(start, end)
+      .replace(/^[\s:;,.()\]]+/, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+    if (!opt) return null;
+    options.push(opt);
+  }
+
+  const stemEndHtml = map[markers[0].index] ?? raw.length;
+  const stemHtml = raw.slice(0, stemEndHtml).trim();
+  if (!stemHtml) return null;
+
+  return { stemHtml, options };
+}
+
+// Check if individual paragraphs of a question cell contain embedded A/B/C/D options
+// as separate paragraphs (common in H1/H2 papers where options follow the stem in
   // the same table cell, each starting with the option letter).
   // Returns [optA, optB, optC, optD] or null.
   function extractEmbeddedOpts(paras) {
@@ -1722,7 +2099,7 @@ async function parseDocxToQuestions(file, msAnswers) {
     const opts = last4.map((p, i) => {
       const plain = stripTags(p).replace(/\xa0/g,' ').replace(/\s+/g,' ').trim();
       if (!plain) return null;
-      const m = plain.match(/^(?:([A-D])[\.\)]|[（(]\s*([1-4])\s*[）)])\s*(.*)$/i);
+      const m = plain.match(/^(?:([A-D])(?:[\.\)]|\s+)|[（(]\s*([1-4])\s*[）)])\s*(.*)$/i);
       if (!m) return null;
       const letter = m[1] ? m[1].toLowerCase() : null;
       const number = m[2] || null;
@@ -1737,10 +2114,23 @@ async function parseDocxToQuestions(file, msAnswers) {
 
   // Parse inline cloze options like "1 肯定 2 挑选 3 安排 4选择".
   function parseInlineClozeOptions(innerTxt) {
-    const matches = [...innerTxt.matchAll(/[1-8]\s*([\u4e00-\u9fffA-Za-z][\u4e00-\u9fffA-Za-z0-9_\- ]*?)(?=\s*[1-8]\s*[\u4e00-\u9fffA-Za-z]|$)/gu)];
-    return matches
-      .map(m => (m[1] || '').trim().replace(/^[\s\W_]+|[\s\W_]+$/g, ''))
-      .filter(Boolean);
+    const text = String(innerTxt || '').replace(/\u3000/g, ' ').replace(/\s+/g, ' ').trim();
+    if (!text) return [];
+
+    const markers = [...text.matchAll(/[1-8](?=\s*[\u4e00-\u9fffA-Za-z])/gu)];
+    if (!markers.length) return [];
+
+    const opts = [];
+    for (let i = 0; i < markers.length; i++) {
+      const start = markers[i].index + markers[i][0].length;
+      const end = (i + 1 < markers.length) ? markers[i + 1].index : text.length;
+      const chunk = text.slice(start, end)
+        .replace(/^[\s.．、)）]+/, '')
+        .replace(/[\s.．、(（)）]+$/u, '')
+        .trim();
+      if (chunk) opts.push(chunk);
+    }
+    return opts;
   }
 
   function trimAfterSectionHeading(text) {
@@ -1750,24 +2140,56 @@ async function parseDocxToQuestions(file, msAnswers) {
     return text.trim();
   }
 
+  function normalizeComparableText(text) {
+    return stripTags(String(text || ''))
+      .replace(/\u3000/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  function hasEquivalentTokenText(tokens, text) {
+    const want = normalizeComparableText(text);
+    if (!want) return false;
+    return (tokens || []).some(token =>
+      token && token.type === 'text' &&
+      normalizeComparableText(token.value || '') === want
+    );
+  }
+
+  function pushUniqueTextToken(tokens, text, ...otherTokenLists) {
+    const value = String(text || '').trim();
+    if (!normalizeComparableText(value)) return false;
+    if (hasEquivalentTokenText(tokens, value)) return false;
+    for (const list of otherTokenLists) {
+      if (hasEquivalentTokenText(list, value)) return false;
+    }
+    tokens.push({ type:'text', value });
+    return true;
+  }
+
+  function stripInlineOptionsFromText(text, qnums) {
+    let cleaned = String(text || '');
+    for (const qn of qnums) {
+      const re = new RegExp(`([Qq]${escapeRegExp(String(qn))}[＿_\\s]*)[（(][^）)]*[）)]`, 'gu');
+      cleaned = cleaned.replace(re, '$1');
+    }
+    return cleaned.replace(/\s{2,}/g, ' ').trim();
+  }
+
   // For consecutive inline cloze MCQs (e.g. Q16-Q20 in one passage),
   // rebuild each question stem as the full shared passage.
   function normalizeInlineClozeGroups(mcqList) {
     const byNum = new Map();
     for (const q of mcqList) {
       if (!q || !q.options || !q.options.length) continue;
-      const stemText = (q.tokens || [])
-        .filter(t => t.type === 'text')
-        .map(t => t.value || '')
-        .join(' ')
-        .trim();
-      const m = stemText.match(INLINE_CLOZE_RE);
-      if (!m) continue;
-
-      const parsedOpts = parseInlineClozeOptions((m[2] || '').trim());
-      if (parsedOpts.length >= 2 && parsedOpts.length <= 8) {
-        q.options = parsedOpts;
-      }
+      const stemText = trimAfterSectionHeading(
+        (q.tokens || [])
+          .filter(t => t.type === 'text')
+          .map(t => t.value || '')
+          .join(' ')
+      ).replace(/\s+/g, ' ').trim();
+      if (!stemText) continue;
+      if (!new RegExp(`[Qq]${escapeRegExp(String(q.qnum))}[?_\s]*`, 'u').test(stemText)) continue;
       byNum.set(parseInt(q.qnum, 10), q);
     }
     if (byNum.size === 0) return;
@@ -1796,8 +2218,11 @@ async function parseDocxToQuestions(file, msAnswers) {
       }
       if (!stems.length) continue;
 
-      const sharedPassage = stems.join('\n')
-        .replace(/[Qq](\d{1,3})\s*[（(][^）)]*[）)]/gu, (_m, qn) => `Q${qn}______`);
+      const sharedPassage = stripInlineOptionsFromText(
+        stems.slice().sort((a, b) => b.length - a.length)[0],
+        g
+      );
+      if (!sharedPassage) continue;
 
       for (const n of g) {
         const q = byNum.get(n);
@@ -1855,16 +2280,50 @@ async function parseDocxToQuestions(file, msAnswers) {
   // Used so that decimal-numPr items after a text-detected question are treated as
   // MCQ options rather than new question starts (handles Chinese Q1/Q2 worksheets).
   let curQFromText = false;
+  let allowImplicitTableOptions = false;
+  let pendingLeadTokens = [];
+
+  function currentHasInlineOptions() {
+    return !!(curQ && extractInlineOptionsForQuestion(curQ.tokens, curQ.qnum).length);
+  }
+
+  function startQuestion(qnum, seedTokens = [], { fromText = false, allowImplicit = false } = {}) {
+    const initialTokens = [];
+    [...pendingLeadTokens, ...seedTokens].forEach(token => {
+      if (!token) return;
+      if (token.type === 'text') pushUniqueTextToken(initialTokens, token.value);
+      else initialTokens.push(token);
+    });
+    curQ = { qnum, tokens: initialTokens };
+    curOpts = [];
+    curOptImages = [];
+    allowImplicitTableOptions = allowImplicit;
+    pendingLeadTokens = [];
+    inSuggestedAnswer = false;
+    curQFromText = fromText;
+  }
 
   function flushQuestion() {
     if (!curQ) return;
+    let finalTokens = curQ.tokens;
+    let finalOpts = [...curOpts];
+    let finalOptImages = [...curOptImages];
+    if (!finalOpts.length) {
+      const inlineOpts = extractInlineOptionsForQuestion(curQ.tokens, curQ.qnum);
+      if (inlineOpts.length) {
+        finalTokens = stripInlineOptionsFromTokens(curQ.tokens, curQ.qnum);
+        finalOpts = inlineOpts;
+        finalOptImages = inlineOpts.map(() => null);
+      }
+    }
     if (curQ.suggestedAnswerText)
       curQ.suggestedAnswerText = curQ.suggestedAnswerText.trim();
-    curOpts.length ? mcq.push({...curQ, options:[...curOpts], optionImages:[...curOptImages]})
-                   : structured.push({...curQ});
+    finalOpts.length ? mcq.push({...curQ, tokens: finalTokens, options: finalOpts, optionImages: finalOptImages})
+                     : structured.push({...curQ});
     curQ = null; curOpts = []; curOptImages = [];
     inSuggestedAnswer = false;
     curQFromText = false;
+    allowImplicitTableOptions = false;
   }
 
   // ── Resolve answer: MS file takes priority over inline ANSWERS section ──
@@ -1935,14 +2394,16 @@ async function parseDocxToQuestions(file, msAnswers) {
     if (item.type === 'table') {
       const rows      = item.value;
       if (!rows || !rows.length) continue;
-      const firstCell = (rows[0][0] || '').trim();
-      const detectedQnum = parseQnum(firstCell);
+      const firstRowQ = findQnumInRow(rows[0] || []);
+      const detectedQnum = firstRowQ.idx === 0 ? firstRowQ.qnum : null;
+      const tableHasEmbeddedQnum = rows.some(row => findQnumInRow(row).qnum !== null);
 
       if (detectedQnum !== null) {
         // ── Question-start table ──
         flushQuestion();
-        curQ    = { qnum: detectedQnum, tokens: [] };
-        curOpts = []; curOptImages = [];
+        startQuestion(detectedQnum, [], {
+          allowImplicit: rows[0].slice(1).some(isAnswerBlank)
+        });
 
         // Check for embedded A/B/C/D options inside the question cell (single-row tables
         // where each option is a separate paragraph starting with A/B/C/D).
@@ -1961,7 +2422,14 @@ async function parseDocxToQuestions(file, msAnswers) {
           curOptImages = embeddedOpts.map(() => null);
         } else {
           const qText = dedupCells(rows[0].slice(1));
-          if (qText) curQ.tokens.push({ type:'text', value: qText });
+          const inlineLettered = rows.length === 1 ? extractInlineLetteredOptionsFromHtml(qText) : null;
+          if (inlineLettered) {
+            if (inlineLettered.stemHtml) curQ.tokens.push({ type:'text', value: inlineLettered.stemHtml });
+            curOpts = inlineLettered.options;
+            curOptImages = inlineLettered.options.map(() => null);
+          } else if (qText) {
+            curQ.tokens.push({ type:'text', value: qText });
+          }
         }
 
         // Check for transposed A/B/C/D column-header format within this table
@@ -1976,41 +2444,74 @@ async function parseDocxToQuestions(file, msAnswers) {
           }
           curOpts = ['', '', '', ''];
           curOptImages = await extractTransposedOptImages(rows, optStartCol, absHri, item.cellImages);
-        } else
+        } else {
 
         // Use indexed loop so we can look up rowImages[ri] for option images
+        let sharedTableTokens = [];
+        let reusableTableTokens = [];
+        let optionHeaderRow = null;
         for (let ri = 1; ri < rows.length; ri++) {
           const row     = rows[ri];
           const r0      = (row[0] || '').trim();
           const r0plain = r0.replace(/<[^>]+>/g, '').trim(); // strip HTML for detection
-          const subQnum = parseQnum(r0);
+          const { qnum: subQnum, idx: subQIdx } = findQnumInRow(row);
 
-          if (subQnum !== null) {
-            // ── New question embedded inside this table (e.g. Q25 inside Q24's table) ──
-            flushQuestion();
-            curQ    = { qnum: subQnum, tokens: [] };
-            curOpts = []; curOptImages = [];
-            const qText2 = dedupCells(row.slice(1));
-            if (qText2) curQ.tokens.push({ type:'text', value: qText2 });
+          if (looksLikeOptionHeaderRow(row)) {
+            optionHeaderRow = row;
 
           } else if (/^[A-D]$/i.test(r0plain)) {
-            // MCQ option row where the letter IS the first cell
-            // e.g. ['A', '10–6', '10–9', '10–12']  or  ['A', '(image)']
-            const optText = dedupCells(row.slice(1));
-            // Always push even if text is empty (image-only options like diagrams A/B/C/D)
+            const optText = formatOptionRowText(row, optionHeaderRow);
             curOpts.push(optText || '');
-            // Capture the first image in this option row (if any)
             const optRids = item.rowImages ? (item.rowImages[ri] || []) : [];
             const optFn   = optRids.length ? await resolveImage(optRids[0]) : null;
             curOptImages.push(optFn);
 
+          } else if (subQnum !== null) {
+            // ── New question embedded inside this table (e.g. Q25 inside Q24's table) ──
+            flushQuestion();
+            const leadText = dedupCells(row.slice(0, subQIdx));
+            const leadTokens = leadText ? [{ type:'text', value: leadText }] : [];
+            const qText2 = dedupCells(row.slice(subQIdx + 1));
+            const qTextIsBlank = !qText2 || isAnswerBlank(qText2);
+            const seedTokens = leadTokens.length ? leadTokens
+              : (sharedTableTokens.length ? sharedTableTokens
+              : (qTextIsBlank ? reusableTableTokens : []));
+            if (leadTokens.length) reusableTableTokens = leadTokens.map(t => ({ ...t }));
+            else if (sharedTableTokens.length) reusableTableTokens = sharedTableTokens.map(t => ({ ...t }));
+            startQuestion(subQnum, seedTokens, {
+              allowImplicit: row.slice(subQIdx + 1).some(isAnswerBlank)
+            });
+            sharedTableTokens = [];
+            optionHeaderRow = null;
+            if (qText2 && !isAnswerBlank(qText2)) {
+              pushUniqueTextToken(curQ.tokens, qText2, reusableTableTokens);
+            }
+
           } else if (!r0) {
             const opts = extractOptsFromRow(row);
             if (opts.length >= 2) {
+              optionHeaderRow = null;
               curOpts.push(...opts);
               // No per-option images for this format (letter embedded in cell text)
               for (let k = 0; k < opts.length; k++) curOptImages.push(null);
             } else {
+              const splitOpt = extractSplitNumberedOptionRow(row);
+              if (splitOpt) {
+                optionHeaderRow = null;
+                const optRids = item.rowImages ? (item.rowImages[ri] || []) : [];
+                const optFn = optRids.length ? await resolveImage(optRids[0]) : null;
+                if (splitOpt.text || optFn) {
+                  curOpts.push(splitOpt.text || '');
+                  curOptImages.push(optFn);
+                  continue;
+                }
+              }
+              const implicitOpt = allowImplicitTableOptions ? extractUnlabeledOption(row) : null;
+              if (implicitOpt && curOpts.length < LETTERS.length) {
+                curOpts.push(implicitOpt);
+                curOptImages.push(null);
+                continue;
+              }
               // Check for image-only options where each cell is just 'A','B','C','D'
               // (e.g. Q5-style: ['','A','B','C','D'] with raster images per cell)
               const optSlice   = row.slice(1).filter(c => c.replace(/<[^>]+>/g,'').trim());
@@ -2029,18 +2530,34 @@ async function parseDocxToQuestions(file, msAnswers) {
                 }
               } else {
                 const extra = dedupCells(row);
-                if (extra) curQ.tokens.push({ type:'text', value: extra });
+                if (extra) {
+                  if (curOpts.length || currentHasInlineOptions()) {
+                    pushUniqueTextToken(sharedTableTokens, extra, curQ ? curQ.tokens : [], reusableTableTokens, pendingLeadTokens);
+                  } else if (curQ) {
+                    pushUniqueTextToken(curQ.tokens, extra, sharedTableTokens, reusableTableTokens, pendingLeadTokens);
+                  }
+                }
               }
             }
           } else {
             const extra = dedupCells(row);
-            if (extra) curQ.tokens.push({ type:'text', value: extra });
+            if (extra) {
+              if (curOpts.length || currentHasInlineOptions()) {
+                pushUniqueTextToken(sharedTableTokens, extra, curQ ? curQ.tokens : [], reusableTableTokens, pendingLeadTokens);
+              } else if (curQ) {
+                pushUniqueTextToken(curQ.tokens, extra, sharedTableTokens, reusableTableTokens, pendingLeadTokens);
+              }
+            }
           }
         }
-      } else if (curQ) {
+        for (const token of sharedTableTokens) {
+          pushUniqueTextToken(pendingLeadTokens, token.value);
+        }
+        }
+      } else if (curQ || tableHasEmbeddedQnum) {
         // ── Continuation table — detect A/B/C/D option rows OR transposed format ──
-        const transpHdr = findTransposedOptions(rows);
-        if (transpHdr !== null && !curOpts.length) {
+        const transpHdr = !tableHasEmbeddedQnum ? findTransposedOptions(rows) : null;
+        if (transpHdr !== null && curQ && !curOpts.length) {
           // Transposed format: A B C D appear as column headers.
           // Collect images column-wise; row labels before header go to stem text.
           const { headerRowIdx, optStartCol } = transpHdr;
@@ -2051,21 +2568,65 @@ async function parseDocxToQuestions(file, msAnswers) {
           curOpts = ['', '', '', ''];
           curOptImages = await extractTransposedOptImages(rows, optStartCol, headerRowIdx, item.cellImages);
         } else {
+          let sharedTableTokens = [];
+          let reusableTableTokens = [];
+          let optionHeaderRow = null;
           for (let ri = 0; ri < rows.length; ri++) {
             const row     = rows[ri];
             const r0plain = (row[0] || '').replace(/<[^>]+>/g, '').trim();
-            if (/^[A-D]$/i.test(r0plain)) {
-              const optText = dedupCells(row.slice(1));
+            const { qnum: rowQnum, idx: rowQIdx } = findQnumInRow(row);
+
+            if (looksLikeOptionHeaderRow(row)) {
+              optionHeaderRow = row;
+            } else if (curQ && /^[A-D]$/i.test(r0plain)) {
+              const optText = formatOptionRowText(row, optionHeaderRow);
               curOpts.push(optText || '');
               const optRids = item.rowImages ? (item.rowImages[ri] || []) : [];
               const optFn   = optRids.length ? await resolveImage(optRids[0]) : null;
               curOptImages.push(optFn);
-            } else if (!r0plain) {
+            } else if (rowQnum !== null) {
+              flushQuestion();
+              const leadText = dedupCells(row.slice(0, rowQIdx));
+              const leadTokens = leadText ? [{ type:'text', value: leadText }] : [];
+              const qText = dedupCells(row.slice(rowQIdx + 1));
+              const qTextIsBlank = !qText || isAnswerBlank(qText);
+              const seedTokens = leadTokens.length ? leadTokens
+                : (sharedTableTokens.length ? sharedTableTokens
+                : (qTextIsBlank ? reusableTableTokens : []));
+              if (leadTokens.length) reusableTableTokens = leadTokens.map(t => ({ ...t }));
+              else if (sharedTableTokens.length) reusableTableTokens = sharedTableTokens.map(t => ({ ...t }));
+              startQuestion(rowQnum, seedTokens, {
+                allowImplicit: row.slice(rowQIdx + 1).some(isAnswerBlank)
+              });
+              sharedTableTokens = [];
+              optionHeaderRow = null;
+              if (qText && !isAnswerBlank(qText)) {
+                pushUniqueTextToken(curQ.tokens, qText, reusableTableTokens);
+              }
+            } else if (curQ && !r0plain) {
               const opts = extractOptsFromRow(row);
               if (opts.length >= 2) {
+                optionHeaderRow = null;
                 curOpts.push(...opts);
                 for (let k = 0; k < opts.length; k++) curOptImages.push(null);
               } else {
+                const splitOpt = extractSplitNumberedOptionRow(row);
+                if (splitOpt) {
+                  optionHeaderRow = null;
+                  const optRids = item.rowImages ? (item.rowImages[ri] || []) : [];
+                  const optFn = optRids.length ? await resolveImage(optRids[0]) : null;
+                  if (splitOpt.text || optFn) {
+                    curOpts.push(splitOpt.text || '');
+                    curOptImages.push(optFn);
+                    continue;
+                  }
+                }
+                const implicitOpt = allowImplicitTableOptions ? extractUnlabeledOption(row) : null;
+                if (implicitOpt && curOpts.length < LETTERS.length) {
+                  curOpts.push(implicitOpt);
+                  curOptImages.push(null);
+                  continue;
+                }
                 // Image-only option cells (single letters A/B/C/D with images)
                 const optSlice   = row.slice(1).filter(c => c.replace(/<[^>]+>/g,'').trim());
                 const allLetters = optSlice.length >= 2 &&
@@ -2082,14 +2643,29 @@ async function parseDocxToQuestions(file, msAnswers) {
                   }
                 } else {
                   const t = dedupCells(row);
-                  if (t) curQ.tokens.push({ type:'text', value: t });
+                  if (t) {
+                    if (!curQ || curOpts.length || currentHasInlineOptions()) {
+                      pushUniqueTextToken(sharedTableTokens, t, curQ ? curQ.tokens : [], reusableTableTokens, pendingLeadTokens);
+                    } else {
+                      pushUniqueTextToken(curQ.tokens, t, sharedTableTokens, reusableTableTokens, pendingLeadTokens);
+                    }
+                  }
                 }
               }
             } else {
               const t = dedupCells(row);
-              if (t) curQ.tokens.push({ type:'text', value: t });
+              if (t) {
+                if (!curQ || curOpts.length || currentHasInlineOptions()) {
+                  pushUniqueTextToken(sharedTableTokens, t, curQ ? curQ.tokens : [], reusableTableTokens, pendingLeadTokens);
+                } else {
+                  pushUniqueTextToken(curQ.tokens, t, sharedTableTokens, reusableTableTokens, pendingLeadTokens);
+                }
+              }
             }
           }
+          for (const token of sharedTableTokens) {
+          pushUniqueTextToken(pendingLeadTokens, token.value);
+        }
         }
       }
       continue;
@@ -2108,9 +2684,8 @@ async function parseDocxToQuestions(file, msAnswers) {
     // with standard numbered exam papers.
     if (plain && ESSAY_Q_LABEL_RE.test(plain)) {
       flushQuestion();                  // saves previous Q + resets inSuggestedAnswer
-      curQ    = { qnum: String(autoQCounter++), tokens: [], suggestedAnswerText: '' };
-      curOpts = []; curOptImages = [];
-      curQFromText = true;
+      startQuestion(String(autoQCounter++), [], { fromText: true });
+      curQ.suggestedAnswerText = '';
       // The label text (e.g. "Planning Question (Example 1)") becomes the first token
       curQ.tokens.push({ type: 'text', value: raw });
       continue;
@@ -2136,9 +2711,7 @@ async function parseDocxToQuestions(file, msAnswers) {
         const qnum = qSubMatch[1];
         const qbody = `(${qSubMatch[2]}) ${qSubMatch[3] || ''}`.trim();
         flushQuestion();           // resets inSuggestedAnswer
-        curQ    = { qnum, tokens: [] };
-        curOpts = []; curOptImages = [];
-        curQFromText = true;
+        startQuestion(qnum, [], { fromText: true });
         curQ.tokens.push({ type:'text', value: qbody || raw });
         continue;
       }
@@ -2153,9 +2726,7 @@ async function parseDocxToQuestions(file, msAnswers) {
         const qtext = qMatch[5];
         if (parseInt(qnum) <= MAX_QNUM) {
           flushQuestion();           // resets inSuggestedAnswer
-          curQ    = { qnum, tokens: [] };
-          curOpts = []; curOptImages = [];
-          curQFromText = true;
+          startQuestion(qnum, [], { fromText: true });
           // Strip the leading "Q1." / "Q1)" / "(1)" / "（1）」 / "1." from raw HTML, keep rest
           const bodyText = raw.replace(/^(?:<[^>]*>)*(?:[Qq]\d+(?:[\.\)\s:]*\s+)?|\(\d+\)|（\d+）|\d+[.)])(?:<\/[^>]*>)*\s*/,'').trim()
                         || raw.replace(/^(?:<[^>]*>)*[Qq]?\d+(?:<\/[^>]*>)*\s+/,'').trim()
@@ -2172,15 +2743,13 @@ async function parseDocxToQuestions(file, msAnswers) {
       
       if (inlineQMatch && !rangeMatch && parseInt(inlineQMatch[1]) <= MAX_QNUM) {
           flushQuestion();
-          curQ = { qnum: inlineQMatch[1], tokens: [] };
-          curOpts = []; curOptImages = [];
-          curQFromText = true;
+          startQuestion(inlineQMatch[1], [], { fromText: true });
           // Keep whole paragraph context for the inline question
           curQ.tokens.push({ type: 'text', value: raw });
 
           // Try to extract inline options: e.g. Q16（1 肯定 2 挑选 3 安排 4选择）
           // Handles both "1 word" (space) and "1word" (no space) formats.
-          const clozeMatch = plain.match(/[Qq]\d{1,3}\s*[（(]([^）)]+)[）)]/u);
+          const clozeMatch = plain.match(/[Qq]\d{1,3}\s*[＿_\s]*[（(]([^）)]+)[）)]/u);
           if (clozeMatch) {
               const innerTxt = clozeMatch[1].trim();
               const optionParts = parseInlineClozeOptions(innerTxt);
@@ -2192,7 +2761,7 @@ async function parseDocxToQuestions(file, msAnswers) {
                   // Replace the option list in the stem with a clean blank so students
                   // see the sentence context rather than the raw options list.
                   // e.g. "Q16（1 肯定 2 挑选 3 安排 4选择）" → "______"
-                  const stemRaw = raw.replace(/[Qq]\d{1,3}\s*[（(][^）)]*[）)]/u, '______');
+                  const stemRaw = raw.replace(/[Qq]\d{1,3}\s*[＿_\s]*[（(][^）)]*[）)]/u, '______');
                   curQ.tokens[curQ.tokens.length - 1] = { type: 'text', value: stemRaw };
               }
           }
@@ -2253,9 +2822,7 @@ async function parseDocxToQuestions(file, msAnswers) {
           numCounter.set(cKey, (numCounter.get(cKey) || 0) + 1);
           const autoQnum = String(numCounter.get(cKey));
           flushQuestion();
-          curQ    = { qnum: autoQnum, tokens: [] };
-          curOpts = []; curOptImages = [];
-          curQFromText = false;
+          startQuestion(autoQnum);
           curQ.tokens.push({ type: 'text', value: raw });
         }
         continue;
@@ -2267,6 +2834,11 @@ async function parseDocxToQuestions(file, msAnswers) {
         curOptImages.push(null);
         continue;
       }
+    }
+
+    if (plain && curQ && (curOpts.length || currentHasInlineOptions())) {
+      pendingLeadTokens.push({ type:'text', value: raw });
+      continue;
     }
 
     if (plain && curQ) curQ.tokens.push({ type:'text', value: raw });
@@ -2292,12 +2864,15 @@ async function parseDocxToQuestions(file, msAnswers) {
 
   const allQuestions = [...qByNum.values()]
     .sort((a, b) => parseInt(a.q.qnum) - parseInt(b.q.qnum))
-    .map(({ isMcq, q }) => ({
-      isMcq,
-      q,
-      // suggestedAnswerText (auto-extracted from doc) takes priority over MS file / inline answers
-      answer: q.suggestedAnswerText || resolveAnswer(q.qnum)
-    }));
+    .map(({ isMcq, q }) => {
+      const resolvedAnswer = q.suggestedAnswerText || resolveAnswer(q.qnum);
+      return {
+        isMcq,
+        q,
+        // suggestedAnswerText (auto-extracted from doc) takes priority over MS file / inline answers
+        answer: isMcq ? (normalizeMcqAnswerValue(resolvedAnswer) || resolvedAnswer) : resolvedAnswer
+      };
+    });
 
   // Safety pass: if an item was parsed as Essay but contains inline cloze
   // syntax (e.g. "Q16（1 ... 2 ... 3 ... 4 ...）"), auto-promote it to MCQ
@@ -2756,7 +3331,7 @@ document.getElementById('resetBtn').addEventListener('click', () => {
 </div>
 
 <footer style="text-align:center; padding: 16px 0 10px; color: #999; font-size: 0.78rem; font-family: sans-serif;">
-  Last updated: Saturday, 12 April 2026, 12:00 PM
+  Last updated: Thursday, 7 May 2026, 8:36 AM
 </footer>
 </body>
 </html>

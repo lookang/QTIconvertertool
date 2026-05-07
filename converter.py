@@ -10,101 +10,138 @@ import re
 
 def parse_mark_scheme(ms_docx_path):
     """
-    Parse a mark scheme document. Returns a dictionary mapping
-    question numbers (strings) to answer text or options.
-    It scans tables for both row-style and col-style MCQ grids,
-    and scans paragraphs for both MCQ and essay answers.
+    Parse a mark-scheme .docx and return a dict  {qnum_str: answer}.
+
+    MCQ papers (P1):
+        The first table is a 6-row × 10-col grid of alternating
+        [question-numbers, answer-letters] rows. Each answer letter is stored
+        as lowercase ('a'–'d') to match QTI simpleChoice identifiers.
+
+    Structured papers (P2 / P3):
+        The table rows have the form  [part_label, answer_text, marks…].
+        All parts belonging to the same question number are concatenated.
+        Result: { '1': '1a: …\n1bi: …\n…', '2': '2a: …', … }
     """
-    import re
-    doc = Document(ms_docx_path)
+    doc    = Document(ms_docx_path)
+    tables = doc.tables
+    if not tables:
+        return {}
+
+    first  = tables[0]
+    nrows  = len(first.rows)
+    ncols  = len(first.columns) if first.rows else 0
+
+    # --- MCQ grid detection ---
+    if nrows >= 6 and ncols >= 10:
+        first_cell = first.rows[0].cells[0].text.strip()
+        if first_cell.isdigit():
+            return _parse_mcq_grid(first)
+
+    # --- Structured MS ---
+    return _parse_structured_ms(tables)
+
+
+def _normalize_mcq_answer(text):
+    """
+    Normalize a mark-scheme MCQ answer token to the QTI choice id.
+
+    Examples:
+        'A' -> 'a'
+        '1' -> 'a'
+        '(1)' -> 'a'
+        '1)' -> 'a'
+        '①' -> 'a'
+        '⑴' -> 'a'
+    """
+    compact = re.sub(r'\s+', '', (text or '')).upper()
+    if not compact:
+        return None
+
+    if compact in ("A", "B", "C", "D"):
+        return compact.lower()
+
+    circled_map = {
+        "①": "1",
+        "②": "2",
+        "③": "3",
+        "④": "4",
+        "⑴": "1",
+        "⑵": "2",
+        "⑶": "3",
+        "⑷": "4",
+    }
+    compact = circled_map.get(compact, compact)
+
+    if compact.startswith(("(", "（")):
+        compact = compact[1:]
+    if compact.endswith((")", "）", ".", "．")):
+        compact = compact[:-1]
+
+    if compact in ("1", "2", "3", "4"):
+        return chr(96 + int(compact))
+
+    return None
+
+
+def _parse_mcq_grid(grid_table):
+    """
+    Alternating rows: [q-numbers …], [answer-letters …], [q-numbers …], …
+    Returns { '1': 'b', '2': 'c', … } (lowercase letters).
+    """
+    answers = {}
+    rows = [[c.text.strip() for c in r.cells] for r in grid_table.rows]
+
+    for i in range(0, len(rows) - 1, 2):
+        nums_row = rows[i]
+        ans_row  = rows[i + 1]
+        for qn, ans in zip(nums_row, ans_row):
+            qn  = qn.strip()
+            ans = ans.strip().upper()
+            if qn.isdigit() and ans in ('A', 'B', 'C', 'D'):
+                answers[qn] = ans.lower()
+
+    return answers
+
+
+def _parse_structured_ms(all_tables):
+    """
+    Rows: [part_label, answer_text, marks…]
+    e.g. ['1a', 'rate of change of velocity', 'B1']
+         ['1bi', 'Taking upwards …', 'C1\nA1']
+    Returns { '1': '1a: rate of change…\n1bi: Taking upwards…', … }
+    """
     answers = {}
 
-    # 1. Parse tables for MCQ grid and structured
-    for table in doc.tables:
-        for r_idx, row in enumerate(table.rows):
-            for c_idx, cell in enumerate(row.cells):
-                ctext = cell.text.strip().upper()
-                mQ = re.match(r'^Q?0*(\d+)$', ctext)
-                if mQ:
-                    qnum_str = mQ.group(1)
-                    found_ans = False
-                    
-                    # Check right cell (column-style)
-                    if c_idx + 1 < len(row.cells):
-                        right = row.cells[c_idx+1].text.strip()
-                        right_upper = right.upper()
-                        if re.match(r'^[ABCD]$', right_upper):
-                            answers[qnum_str] = right.lower()
-                            found_ans = True
-                        elif re.match(r'^[1234]$', right_upper):
-                            answers[qnum_str] = chr(96 + int(right))
-                            found_ans = True
-                        elif right:
-                            if qnum_str in answers and len(answers[qnum_str]) > 1:
-                                answers[qnum_str] += '\n' + right
-                            else:
-                                answers[qnum_str] = right
-                            found_ans = True
-                    
-                    # Check bottom cell (row-style)
-                    if not found_ans and r_idx + 1 < len(table.rows):
-                        bottom = table.rows[r_idx+1].cells[c_idx].text.strip().upper()
-                        if re.match(r'^[ABCD]$', bottom):
-                            answers[qnum_str] = bottom.lower()
-                        elif re.match(r'^[1234]$', bottom):
-                            answers[qnum_str] = chr(96 + int(bottom))
-                else:
-                    struct_match = re.match(r'^[Qq]?0*(\d+)[.:：]\s*(.*)', cell.text)
-                    if struct_match:
-                        qnum_str = struct_match.group(1)
-                        text = struct_match.group(2).strip()
-                        if text:
-                            answers[qnum_str] = text
+    for table in all_tables:
+        for row in table.rows:
+            cells = [c.text.strip() for c in row.cells]
 
-    # 2. Parse paragraphs for answers (Essay style & list style)
-    current_qnum = None
-    for para in doc.paragraphs:
-        pt = para.text.strip()
-        if not pt:
-            continue
-            
-        qnum = None
-        ans_text = ""
-        m1 = re.match(r'^[Qq]0*(\d+)[.:：\s]*(.*)', pt)
-        m2 = re.match(r'^0*(\d+)[.:：]+\s*(.*)', pt)
-        if m1:
-            qnum = m1.group(1)
-            ans_text = m1.group(2).strip()
-        elif m2:
-            qnum = m2.group(1)
-            ans_text = m2.group(2).strip()
+            paired_answers = 0
+            for idx in range(0, len(cells) - 1, 2):
+                qn = cells[idx].strip()
+                ans = _normalize_mcq_answer(cells[idx + 1])
+                if qn.isdigit() and ans:
+                    answers[qn] = ans
+                    paired_answers += 1
 
-        if qnum:
-            is_mcq = False
-            clean_ans = ans_text.upper().replace('.', '').strip()
-            if re.match(r'^[ABCD]$', clean_ans):
-                ans_text = clean_ans.lower()
-                is_mcq = True
-            elif re.match(r'^[1234]$', clean_ans):
-                ans_text = chr(96 + int(clean_ans))
-                is_mcq = True
-
-            if qnum in answers and re.match(r'^[a-d]$', answers[qnum]):
-                if is_mcq:
-                    answers[qnum] = ans_text
-                current_qnum = None
+            if paired_answers:
                 continue
-                
-            if qnum in answers and len(answers[qnum]) > 1 and not is_mcq and answers[qnum] != ans_text:
-                if ans_text not in answers[qnum]:
-                    answers[qnum] += '\n' + pt
+
+            if len(cells) < 2:
+                continue
+            label = cells[0]
+            text  = cells[1]
+            if not label or not text:
+                continue
+            m = re.match(r'^(\d+)', label)
+            if not m:
+                continue
+            qnum = m.group(1)
+            entry = f"{label}: {text}"
+            if qnum in answers:
+                answers[qnum] += "\n" + entry
             else:
-                answers[qnum] = ans_text or pt
-            
-            current_qnum = None if is_mcq else qnum
-        else:
-            if current_qnum and current_qnum in answers:
-                answers[current_qnum] += '\n' + pt
+                answers[qnum] = entry
 
     return answers
 
@@ -127,29 +164,6 @@ def convert_docx_to_qti(input_docx, job_dir, ms_answers=None):
                   ('a'–'d') matching the simpleChoice identifier.
     """
     doc = Document(input_docx)
-
-    # -----------------------------
-    # PRE-PROCESS HANYU PINYIN (W:RUBY)
-    # -----------------------------
-    import html
-    from docx.oxml import OxmlElement
-    for ruby in doc.element.xpath('.//*[local-name()="ruby"]'):
-        rt = ruby.xpath('.//*[local-name()="rt"]')
-        base = ruby.xpath('.//*[local-name()="rubyBase"]')
-        # Extract text from descendants
-        rt_text = "".join(t.text or "" for r in rt for t in r.xpath('.//*[local-name()="t"]')) if rt else ""
-        base_text = "".join(t.text or "" for r in base for t in r.xpath('.//*[local-name()="t"]')) if base else ""
-        
-        rt_safe = html.escape(rt_text)
-        base_safe = html.escape(base_text)
-        
-        fake_r = OxmlElement('w:r')
-        fake_t = OxmlElement('w:t')
-        fake_t.text = f"<ruby>{base_safe}<rp>(</rp><rt>{rt_safe}</rt><rp>)</rp></ruby>"
-        fake_r.append(fake_t)
-        
-        ruby.addprevious(fake_r)
-        ruby.getparent().remove(ruby)
 
     assets_dir = os.path.join(job_dir, "assets")
     items_dir  = os.path.join(job_dir, "items")
@@ -181,16 +195,6 @@ def convert_docx_to_qti(input_docx, job_dir, ms_answers=None):
         text = "".join(node.text or "" for node in run.xpath(".//w:t"))
         if not text:
             return ""
-            
-        rPr = run.find(qn('w:rPr'))
-        if rPr is not None:
-            rFonts = rPr.find(qn('w:rFonts'))
-            if rFonts is not None:
-                ascii_font = rFonts.get(qn('w:ascii'))
-                if ascii_font and ascii_font.lower() == 'hypy':
-                    mapping = {'C': 'ǎ', 'H': 'ǐ', 'K': 'ē', 'N': 'è', 'P': 'ē', 'Q': 'ó', 'S': 'è', 'A': 'ā', 'B': 'á', 'D': 'à', 'E': 'ō', 'F': 'ó', 'G': 'ǒ', 'I': 'ī', 'J': 'í', 'L': 'ì', 'M': 'ū', 'O': 'ǔ', 'R': 'ú', 'T': 'ù', 'U': 'ǖ', 'V': 'ǘ', 'W': 'ǚ', 'X': 'ǜ', 'Y': 'ě', 'Z': 'ě'}
-                    text = "".join(mapping.get(c, c) for c in text)
-
         is_sup    = run.xpath(".//w:vertAlign[@w:val='superscript']")
         is_sub    = run.xpath(".//w:vertAlign[@w:val='subscript']")
         is_bold   = run.xpath(".//w:b")
@@ -201,49 +205,9 @@ def convert_docx_to_qti(input_docx, job_dir, ms_answers=None):
         if is_italic: text = f"<em>{text}</em>"
         return text
 
-    def merge_adjacent_tags(text):
-        """Merge adjacent identical inline tags: <sup>a</sup><sup>b</sup> → <sup>ab</sup>."""
-        for tag in ('sup', 'sub', 'strong', 'em'):
-            text = re.sub(f'</{tag}><{tag}>', '', text)
-        return text
-
-    def halve_if_doubled(s):
-        """Recursively halve a string that is an exact repeat of itself.
-        Fixes Word XML duplicated diagram labels: 'cablecable'→'cable',
-        'tension in chain'×4 → 'tension in chain'×2 → 'tension in chain'."""
-        n = len(s)
-        if n >= 10 and n % 2 == 0:
-            mid = n >> 1
-            if s[:mid] == s[mid:]:
-                return halve_if_doubled(s[:mid])   # recurse for ×4, ×8 …
-        return s
-
     def extract_cell_text(cell):
-        """Extract formatted text from DIRECT paragraphs of a table cell only.
-        • Does NOT descend into nested <w:tbl> elements.
-        • Paragraphs are joined with a space so multi-line option cells like
-          ['A', 'option text'] become 'A option text' for OPT_CELL_RE matching.
-        • Detects text doubling via the HTML-stripped plain text and replaces
-          with the deduplicated plain version.
-        • Deduplicates across paragraphs within the cell (removes cross-paragraph
-          repetition from Word merged-cell artefacts)."""
-        seen_paras = set()
-        paras = []
-        for para in cell.iterchildren(qn('w:p')):
-            runs  = "".join(extract_run_text(r) for r in para.xpath(".//w:r"))
-            runs  = merge_adjacent_tags(runs).strip()
-            # Check via HTML-stripped text so '<strong>X</strong><strong>X</strong>'
-            # → merged '<strong>XX</strong>' is still detected as doubled.
-            plain    = re.sub(r'<[^>]+>', '', runs)
-            deduped  = halve_if_doubled(plain)
-            if deduped != plain:
-                runs = deduped  # use plain deduplicated text (HTML stripped)
-            runs = runs.strip()
-            # Cross-paragraph dedup: skip paragraphs whose text we've already seen.
-            if runs and runs not in seen_paras:
-                seen_paras.add(runs)
-                paras.append(runs)
-        return " ".join(paras)
+        """Extract formatted text (sup/sub/bold/italic) from a table cell element."""
+        return "".join(extract_run_text(r) for r in cell.xpath(".//w:r")).strip()
 
     def iter_block_items(doc):
         body = doc.element.body
@@ -255,7 +219,6 @@ def convert_docx_to_qti(input_docx, job_dir, ms_answers=None):
                 paragraph_text = "".join(
                     extract_run_text(r) for r in child.xpath("./w:r")
                 ).strip()
-                paragraph_text = merge_adjacent_tags(paragraph_text)
 
                 if paragraph_text:
                     yield ("text", paragraph_text)
@@ -276,14 +239,11 @@ def convert_docx_to_qti(input_docx, job_dir, ms_answers=None):
 
                     row_data = []
 
-                    for cell in row.iterchildren(qn('w:tc')):
-                        # Extract text from direct paragraphs only (no nested table content)
+                    for cell in row.xpath(".//w:tc"):
+                        # FIX: use formatted text (preserves <sup>/<sub>)
                         row_data.append(extract_cell_text(cell))
 
-                        # Collect images from ALL descendants of this cell
-                        # (includes images in nested tables — images from nested option rows
-                        #  are also picked up when we process those inner rows directly,
-                        #  but seen_image_rids prevents duplicates)
+                        # FIX: collect images from table cells
                         for node in cell.iter():
                             if node.tag.endswith('blip'):
                                 rId = node.get(qn('r:embed'))
@@ -318,61 +278,142 @@ def convert_docx_to_qti(input_docx, job_dir, ms_answers=None):
     OPT_CELL_RE  = re.compile(r'^([A-D])\s+(.*)', re.DOTALL | re.I)
     # Single-letter MCQ label that IS an option identifier (not part of a word)
     OPT_LABEL_RE = re.compile(r'^[A-D]$', re.I)
+    NUMBERED_OPT_LABEL_RE = re.compile(
+        r'^(?:[\u2474-\u247B]|[\u2460-\u2467]|[\(\uff08]\s*[1-8]\s*[\)\uff09]|[1-8][\.\)\uff0e])$',
+        re.I
+    )
+
+    def plain_cell_text(cell):
+        return re.sub(r'<[^>]+>', '', cell or '').replace('\xa0', ' ').strip()
 
     def extract_opts_from_row(row):
-        """Return list of option texts from a table options row (format: ['', 'A text', ...]).
-        Also handles bold option letters, e.g. ['', '<strong>A</strong>  text', ...]."""
+        """Return option texts from a table row."""
         opts = []
         for cell in row[1:]:          # skip first (empty) cell
             cell = cell.strip()
             if not cell:
                 continue
-            # Strip HTML tags to check for option-letter prefix (handles bold letters)
-            cell_plain = re.sub(r'<[^>]+>', '', cell)
-            m = OPT_CELL_RE.match(cell_plain)
+            m = OPT_CELL_RE.match(cell)
             if m:
-                # Remove the leading letter (possibly HTML-wrapped) from original cell
-                opt_raw = re.sub(r'^(?:<[^>]+>)*[A-D](?:</[^>]+>)*\s*', '', cell,
-                                 flags=re.IGNORECASE)
-                # Strip dangling closing tags at start (e.g. '</strong>' when letter
-                # shares an opening tag with the content: '<strong>A </strong>text')
-                opt_raw = re.sub(r'^(\s*</[^>]+>)+', '', opt_raw).strip()
-                opts.append(opt_raw or m.group(2).strip())
+                opts.append(m.group(2).strip())
             # lone 'A'/'B' etc (image-only options) → skip (image captured separately)
+        if opts:
+            return opts
+
+        if row and not plain_cell_text(row[0]):
+            label_idx = None
+            for idx, cell in enumerate(row[1:], start=1):
+                plain = plain_cell_text(cell)
+                if not plain:
+                    continue
+                if not NUMBERED_OPT_LABEL_RE.match(plain):
+                    label_idx = None
+                    break
+                label_idx = idx
+                break
+
+            if label_idx is not None:
+                opt_text = dedup_cells(row[label_idx + 1:]).strip()
+                if opt_text and not is_answer_blank(opt_text):
+                    return [opt_text]
+
         return opts
 
     # -----------------------------
     # REGEX PATTERNS (STRICT)
     # -----------------------------
-    question_regex  = re.compile(r'^(?:[Qq](\d+)(?:[\.\)\s:]*\s+)?|\((\d+)\)|（(\d+)）|(\d+)(?:[\.\)]\s+|\s+))(.*)')
-    option_regex    = re.compile(r'^(?:[A-H][\.\)]\s*|[\u2474-\u247B]\s*|[\u2460-\u2467]\s*|[（(]\s*[1-8]\s*[）)]\s*|[1-8][\.\)．]\s*)(.*)')
-    OPTIONS_HEADER_RE = re.compile(r'^(?:options|choices)(?:\s*[:：])?$', re.IGNORECASE)
-    STANDALONE_OPTION_LABEL_RE = re.compile(r'^[A-D]$', re.IGNORECASE)
+    question_regex  = re.compile(r'^(\d+)\s+(.*)')
+    option_regex    = re.compile(
+        r'^(?:[A-D][\.\)]|[\(\uff08]\s*[1-8]\s*[\)\uff09]|[1-8][\.\)\uff0e])\s*(.*)'
+    )
     # Table first-cell is a bare question number, optionally with a short
     # non-digit prefix from Word cross-reference field codes (e.g. "XX23").
-    qnum_only_regex = re.compile(r'^[A-Z]{0,5}(\d{1,3})$')
+    qnum_only_regex = re.compile(r'^[A-Z]{0,5}(\d{1,3})$', re.I)
+    answer_blank_regex = re.compile(r'^[\(\（][\s_＿]*[\)\）]$')
+    inline_option_regex = re.compile(
+        r'Q(?P<qnum>\d+)[_＿\s]*[（(]\s*1\s*(?P<a>.*?)\s*2\s*(?P<b>.*?)\s*3\s*(?P<c>.*?)\s*4\s*(?P<d>.*?)\s*[）)]',
+        re.DOTALL
+    )
+    inline_option_strip_regex = re.compile(
+        r'(Q\d+[_＿\s]*)[（(]\s*1\s*.*?\s*2\s*.*?\s*3\s*.*?\s*4\s*.*?\s*[）)]',
+        re.DOTALL
+    )
 
     MAX_QNUM = 200   # ignore "question numbers" > this (e.g. the year 2022)
 
     def parse_qnum(first_cell):
         """Return int qnum from first_cell if it looks like a question-start,
-        else return None.  Handles bare '25', prefixed 'XX23', and bold
-        '<strong>1</strong>' cells (strip HTML tags before matching)."""
-        clean = re.sub(r'<[^>]+>', '', first_cell).strip()
-        m = qnum_only_regex.match(clean)
+        else return None.  Handles bare '25' and prefixed 'XX23' alike."""
+        normalized = re.sub(r'\s+', '', first_cell or '')
+        m = qnum_only_regex.match(normalized)
         if m:
             n = int(m.group(1))
             if n <= MAX_QNUM:
                 return str(n)   # normalise to plain digit string
         return None
 
-    # Pattern to detect labelled question tables (notes-style docs)
-    # e.g. "Planning Question (Example 1)", "Practice Question", "Additional question 2"
-    labelled_q_regex = re.compile(
-        r'^(planning question|practice question|additional question)',
-        re.IGNORECASE
-    )
-    labelled_q_counter = [0]   # mutable so nested flush_current can read it
+    def is_answer_blank(text):
+        compact = text.replace('\u3000', ' ').strip()
+        return bool(compact) and bool(answer_blank_regex.match(compact))
+
+    def find_qnum_in_row(row):
+        for idx, cell in enumerate(row):
+            plain = plain_cell_text(cell)
+            if not plain:
+                continue
+            if OPT_LABEL_RE.match(plain) or NUMBERED_OPT_LABEL_RE.match(plain):
+                return None, None
+            qnum = parse_qnum(plain)
+            if qnum is not None:
+                return qnum, idx
+            return None, None
+        return None, None
+
+    def extract_unlabeled_option(row):
+        if not row or row[0].strip():
+            return None
+        unique_tail = []
+        seen = set()
+        for cell in row[1:]:
+            cell = cell.strip()
+            if not cell or cell in seen:
+                continue
+            seen.add(cell)
+            unique_tail.append(cell)
+        if len(unique_tail) != 1:
+            return None
+        candidate = unique_tail[0]
+        if is_answer_blank(candidate) or parse_qnum(candidate) is not None:
+            return None
+        return candidate
+
+    def extract_inline_options_from_tokens(tokens, qnum):
+        joined = "\n".join(val for ttype, val in tokens if ttype == "text")
+        if not joined:
+            return []
+        for match in inline_option_regex.finditer(joined):
+            if match.group("qnum") != str(qnum):
+                continue
+            extracted = []
+            for key in ("a", "b", "c", "d"):
+                opt = re.sub(r'\s+', ' ', match.group(key)).strip()
+                if opt:
+                    extracted.append(opt)
+            if len(extracted) >= 2:
+                return extracted
+        return []
+
+    def strip_inline_options_from_tokens(tokens):
+        cleaned = []
+        for ttype, val in tokens:
+            if ttype != "text":
+                cleaned.append((ttype, val))
+                continue
+            stripped = inline_option_strip_regex.sub(r'\1', val)
+            stripped = re.sub(r'\s{2,}', ' ', stripped).strip()
+            if stripped:
+                cleaned.append((ttype, stripped))
+        return cleaned
 
     # -----------------------------
     # STORAGE
@@ -380,14 +421,47 @@ def convert_docx_to_qti(input_docx, job_dir, ms_answers=None):
     mcq_questions        = []
     structured_questions = []
 
-    current_qnum   = None
-    current_tokens = []
-    options        = []
+    current_qnum                 = None
+    current_tokens               = []
+    options                      = []
+    allow_implicit_table_options = False
+    pending_lead_tokens          = []
 
     answers              = {}
     reading_answers      = False
     current_answer_q     = None
     current_answer_tokens = []
+
+    def start_question(qnum, seed_tokens=None, allow_implicit_options=False):
+        nonlocal current_qnum, current_tokens, options
+        nonlocal allow_implicit_table_options, pending_lead_tokens
+        current_qnum = qnum
+        current_tokens = list(pending_lead_tokens)
+        current_tokens.extend(seed_tokens or [])
+        options = []
+        allow_implicit_table_options = allow_implicit_options
+        pending_lead_tokens = []
+
+    def flush_current():
+        if current_qnum is None:
+            return
+        inline_options = []
+        tokens_for_output = current_tokens
+        if not options:
+            inline_options = extract_inline_options_from_tokens(current_tokens, current_qnum)
+            if inline_options:
+                tokens_for_output = strip_inline_options_from_tokens(current_tokens)
+        if options or inline_options:
+            mcq_questions.append({
+                "qnum":    current_qnum,
+                "tokens":  tokens_for_output,
+                "options": options or inline_options
+            })
+        else:
+            structured_questions.append({
+                "qnum":   current_qnum,
+                "tokens": current_tokens
+            })
 
     # -----------------------------
     # PARSE DOCUMENT
@@ -439,119 +513,65 @@ def convert_docx_to_qti(input_docx, job_dir, ms_answers=None):
             if not rows:
                 continue
 
-            first_cell = rows[0][0].strip() if rows[0] else ''
-            detected_qnum = parse_qnum(first_cell)
+            shared_table_tokens = []
 
-            # helper: flush current question into appropriate bucket
-            def flush_current():
-                if current_qnum is not None:
-                    if options:
-                        mcq_questions.append({
-                            "qnum":    current_qnum,
-                            "tokens":  current_tokens,
-                            "options": options
-                        })
-                    else:
-                        structured_questions.append({
-                            "qnum":   current_qnum,
-                            "tokens": current_tokens
-                        })
+            for row in rows:
+                if not row:
+                    continue
 
-            # ── Labelled question table (notes-style docs) ────────────────
-            # e.g. "Planning Question (Example 1)", "Practice Question"
-            # Strip only first line (the label) and treat rest as question text.
-            first_cell_plain = re.sub(r'<[^>]+>', '', first_cell).strip().split('\n')[0].strip()
-            is_labelled_q = labelled_q_regex.match(first_cell_plain)
+                detected_qnum, qnum_idx = find_qnum_in_row(row)
+                if detected_qnum is not None:
+                    flush_current()
+                    q_text = dedup_cells(row[qnum_idx + 1:])
+                    allow_implicit_options = any(
+                        is_answer_blank(cell) for cell in row[qnum_idx + 1:]
+                    )
+                    start_question(
+                        detected_qnum,
+                        seed_tokens=shared_table_tokens,
+                        allow_implicit_options=allow_implicit_options
+                    )
+                    if q_text and not is_answer_blank(q_text):
+                        current_tokens.append(("text", q_text))
+                    continue
 
-            if is_labelled_q and detected_qnum is None:
-                flush_current()
-                labelled_q_counter[0] += 1
-                current_qnum = str(labelled_q_counter[0])
-                current_tokens = []
-                options = []
-                # The full first-cell text (after stripping the label line) is the question body
-                # We keep everything — the converter will include the label too which helps context
-                full_text = first_cell.replace('\r', '').strip()
-                if full_text:
-                    current_tokens.append(("text", full_text))
-                # Additional rows in same table that are NOT answer rows go in too
-                ANSWER_LABELS = re.compile(
-                    r'^(suggested answer|marking scheme|possible answer)',
-                    re.IGNORECASE
-                )
-                for row in rows[1:]:
-                    row0 = row[0].strip() if row else ''
-                    row0_plain = re.sub(r'<[^>]+>', '', row0).strip().split('\n')[0]
-                    if ANSWER_LABELS.match(row0_plain):
-                        break   # Stop before model answers
-                    extra = dedup_cells(row)
-                    if extra:
-                        current_tokens.append(("text", extra))
+                row0 = row[0].strip()
 
-            # ── Question-start table: first cell is a question number ──────
-            elif detected_qnum is not None:
+                if current_qnum is not None and row0 and OPT_LABEL_RE.match(row0):
+                    opt_text = dedup_cells(row[1:])
+                    if opt_text:
+                        options.append(opt_text)
+                    continue
 
-                flush_current()
-
-                current_qnum   = detected_qnum
-                current_tokens = []
-                options        = []
-
-                # Question text from remaining cells of row 0 (dedup merged cells)
-                q_text = dedup_cells(rows[0][1:])
-                if q_text:
-                    current_tokens.append(("text", q_text))
-
-                # Process additional rows in the same table
-                for row in rows[1:]:
-                    if not row:
+                if current_qnum is not None and allow_implicit_table_options:
+                    implicit_opt = extract_unlabeled_option(row)
+                    if implicit_opt and len(options) < 4:
+                        options.append(implicit_opt)
                         continue
-                    row0     = row[0].strip()
-                    row0_plain = re.sub(r'<[^>]+>', '', row0).strip()  # strip HTML for detection
-                    sub_qnum = parse_qnum(row0)
 
-                    if sub_qnum is not None:
-                        # ── A new question starts inside this same table ──
-                        # (e.g. Q25 embedded in Q24's big table)
-                        flush_current()
-                        current_qnum   = sub_qnum
-                        current_tokens = []
-                        options        = []
-                        q_text = dedup_cells(row[1:])
-                        if q_text:
-                            current_tokens.append(("text", q_text))
+                if current_qnum is not None and not row0:
+                    opts = extract_opts_from_row(row)
+                    if opts:
+                        options.extend(opts)
+                        continue
 
-                    elif OPT_LABEL_RE.match(row0_plain):
-                        # FIX: MCQ option row where the letter IS the first cell
-                        # e.g. ['A', '10–6', '10–9', '10–12']  (Q1 format)
-                        # or   ['A', 'I1',   'I4R3']            (Q24 format)
-                        opt_text = dedup_cells(row[1:])
-                        if opt_text:
-                            options.append(opt_text)
-                        # (images in option rows are already queued by iter_block_items)
+                extra = dedup_cells(row)
+                if not extra:
+                    continue
 
-                    elif not row0:
-                        # Candidate MCQ options row: ['', 'A text', 'B text', ...]
-                        opts = extract_opts_from_row(row)
-                        if len(opts) >= 2:
-                            options.extend(opts)
-                        else:
-                            # Not recognisable options — treat as extra question text
-                            extra = dedup_cells(row)
-                            if extra:
-                                current_tokens.append(("text", extra))
-                    else:
-                        # Sub-part continuation inside the same table
-                        extra = dedup_cells(row)
-                        if extra:
-                            current_tokens.append(("text", extra))
+                current_has_inline_options = (
+                    current_qnum is not None and
+                    bool(extract_inline_options_from_tokens(current_tokens, current_qnum))
+                )
 
-            # ── Continuation table: first cell is not a question number ────
-            elif current_qnum is not None:
-                for row in rows:
-                    row_text = dedup_cells(row)
-                    if row_text:
-                        current_tokens.append(("text", row_text))
+                # Standalone rows that appear after an MCQ already has choices
+                # (either explicit table options or inline numbered choices)
+                # are typically instructions or shared passage text for the
+                # next question block, not part of the previous item.
+                if current_qnum is None or options or current_has_inline_options:
+                    shared_table_tokens.append(("text", extra))
+                else:
+                    current_tokens.append(("text", extra))
 
             continue
 
@@ -568,70 +588,26 @@ def convert_docx_to_qti(input_docx, job_dir, ms_answers=None):
                 continue
 
             qmatch = question_regex.match(text)
-            qnum_str = qmatch.group(1) or qmatch.group(2) or qmatch.group(3) or qmatch.group(4) if qmatch else None
+
+            if qmatch and int(qmatch.group(1)) <= MAX_QNUM:
+                flush_current()
+                start_question(qmatch.group(1))
+                current_tokens.append(("text", qmatch.group(2)))
+                continue
+
             opt = option_regex.match(text)
 
-            if current_qnum is not None and opt:
+            if opt:
                 options.append(opt.group(1))
                 continue
 
-            if qmatch and qnum_str and int(qnum_str) <= MAX_QNUM:
+            current_has_inline_options = (
+                current_qnum is not None and
+                bool(extract_inline_options_from_tokens(current_tokens, current_qnum))
+            )
 
-                if current_qnum is not None:
-
-                    if options:
-                        mcq_questions.append({
-                            "qnum":    current_qnum,
-                            "tokens":  current_tokens,
-                            "options": options
-                        })
-                    else:
-                        structured_questions.append({
-                            "qnum":   current_qnum,
-                            "tokens": current_tokens
-                        })
-
-                current_qnum   = qnum_str
-                current_tokens = [("text", qmatch.group(5) or "")]
-                options        = []
-                continue
-
-            if OPTIONS_HEADER_RE.match(text):
-                continue
-            if current_qnum is not None and options and STANDALONE_OPTION_LABEL_RE.match(text):
-                continue
-
-            range_match = re.search(r'[Qq]\d+\s*[-－到至\u2013\u2014]\s*[Qq]\d+', text)
-            inline_qmatch = re.search(r'(?:^|[^A-Za-z0-9])[Qq](\d{1,3})(?:[^A-Za-z0-9]|$)', text)
-            
-            if inline_qmatch and not range_match and int(inline_qmatch.group(1)) <= MAX_QNUM:
-                if current_qnum is not None:
-                    if options:
-                        mcq_questions.append({
-                            "qnum":    current_qnum,
-                            "tokens":  current_tokens,
-                            "options": options
-                        })
-                    else:
-                        structured_questions.append({
-                            "qnum":   current_qnum,
-                            "tokens": current_tokens
-                        })
-                current_qnum = inline_qmatch.group(1)
-                current_tokens = [("text", text)]
-                options = []
-                
-                cloze_match = re.search(r'[Qq]\d{1,3}\s*[（\(](.*?)[）\)]', text)
-                if cloze_match:
-                    inner_txt = cloze_match.group(1).strip()
-                    # Split horizontally using python regex
-                    parts = [p.strip() for p in re.split(r'(?:^|\s+)[a-hA-H1-8][\.\)\s]+', inner_txt) if p.strip()]
-                    if 2 <= len(parts) <= 8:
-                        options = parts
-                continue
-
-            if opt and current_qnum is not None:
-                options.append(opt.group(1))
+            if current_qnum is not None and (options or current_has_inline_options):
+                pending_lead_tokens.append(("text", text))
                 continue
 
             current_tokens.append(("text", text))
@@ -639,18 +615,7 @@ def convert_docx_to_qti(input_docx, job_dir, ms_answers=None):
     if current_answer_q is not None:
         answers[current_answer_q] = current_answer_tokens
 
-    if current_qnum is not None:
-        if options:
-            mcq_questions.append({
-                "qnum":    current_qnum,
-                "tokens":  current_tokens,
-                "options": options
-            })
-        else:
-            structured_questions.append({
-                "qnum":   current_qnum,
-                "tokens": current_tokens
-            })
+    flush_current()
 
     # ─────────────────────────────────────────────────────────────────
     # HELPER: resolve answer for a question number
@@ -660,10 +625,16 @@ def convert_docx_to_qti(input_docx, job_dir, ms_answers=None):
         """Return answer string for the given question number."""
         # External mark-scheme takes priority
         if qnum in ms_answers:
-            return ms_answers[qnum]
+            answer = ms_answers[qnum]
+            if is_mcq:
+                return _normalize_mcq_answer(answer) or answer
+            return answer
         # Inline ANSWERS section
         if qnum in answers:
-            return answer_tokens_to_string(answers[qnum])
+            answer = answer_tokens_to_string(answers[qnum])
+            if is_mcq:
+                return _normalize_mcq_answer(answer) or answer
+            return answer
         return "None"
 
     # -----------------------------
@@ -673,7 +644,6 @@ def convert_docx_to_qti(input_docx, job_dir, ms_answers=None):
     import random
     import string
     import xml.sax.saxutils as saxutils
-
 
     os.makedirs(items_dir, exist_ok=True)
 
@@ -694,8 +664,7 @@ def convert_docx_to_qti(input_docx, job_dir, ms_answers=None):
 
             if ttype == "text":
 
-                safe_val = val if val is not None else ""
-                safe  = saxutils.escape(safe_val)
+                safe  = saxutils.escape(val)
                 safe  = safe.replace("&lt;", "<").replace("&gt;", ">")
                 html += f"<div>{safe}</div>\n"
 
@@ -714,7 +683,6 @@ def convert_docx_to_qti(input_docx, job_dir, ms_answers=None):
                     html += "<tr>"
                     for cell in row:
                         safe  = saxutils.escape(cell)
-                        safe  = safe.replace("&lt;", "<").replace("&gt;", ">")
                         html += f"<td>{safe}</td>"
                     html += "</tr>\n"
                 html += "</table>\n"
@@ -740,53 +708,43 @@ def convert_docx_to_qti(input_docx, job_dir, ms_answers=None):
 
     letters = ["a", "b", "c", "d", "e", "f"]
 
-    # ---------------------------------------------------------------
-    # MERGE + DEDUPLICATE + SORT all questions before generating XML.
-    #
-    # Problem: iterating mcq_questions first then structured_questions
-    # produces item_refs in two unordered batches, so SLS imports them
-    # in wrong order (Q5 shows as SLS question 22, etc.).
-    # Additionally, some papers produce a false Q1 from cover-page
-    # text ("1 hour …") giving two Q001 entries.
-    #
-    # Fix: build a dict keyed by qnum — MCQ entries win over structured
-    # (real MCQ questions have options; cover-page false positives do not).
-    # Then sort numerically so assessment_test.xml lists Q001, Q002 … in order.
-    # ---------------------------------------------------------------
-    q_by_num = {}   # qnum → ('mcq'|'structured', q_dict)
+    # -----------------------------
+    # MCQ QUESTIONS → QTI
+    # -----------------------------
     for q in mcq_questions:
-        q_by_num[q['qnum']] = ('mcq', q)
-    for q in structured_questions:
-        if q['qnum'] not in q_by_num:          # don't overwrite real MCQ with cover-page structured
-            q_by_num[q['qnum']] = ('structured', q)
 
-    all_questions = sorted(q_by_num.values(), key=lambda p: int(p[1]['qnum']))
+        answer_text = resolve_answer(q["qnum"], is_mcq=True)
 
-    # -----------------------------
-    # ALL QUESTIONS → QTI (in numerical order)
-    # -----------------------------
-    for qtype, q in all_questions:
+        item_id  = f"Q{int(q['qnum']):03d}_{random_id()}"
+        filename = os.path.join(items_dir, f"{item_id}.xml")
 
-        if qtype == 'mcq':
+        stem_html = tokens_to_html(q["tokens"])
 
-            answer_text = resolve_answer(q["qnum"], is_mcq=True)
+        title_text = ""
+        title_candidates = []
+        for ttype, val in q["tokens"]:
+            if ttype == "text":
+                plain = re.sub(r'<[^>]+>', '', val).strip()
+                if plain:
+                    title_candidates.append(plain)
 
-            item_id  = f"Q{int(q['qnum']):03d}_{random_id()}"
-            filename = os.path.join(items_dir, f"{item_id}.xml")
+        for candidate in title_candidates:
+            if any(marker in candidate for marker in ("______", "＿＿＿", "(      )", "(       )")):
+                title_text = candidate[:70]
+                break
 
-            stem_html = tokens_to_html(q["tokens"])
-
-            title_text = ""
-            for ttype, val in q["tokens"]:
-                if ttype == "text":
-                    title_text = val
+        if not title_text:
+            for candidate in title_candidates:
+                if any(marker in candidate for marker in ("?", "？")):
+                    title_text = candidate[:70]
                     break
 
-            # Strip HTML tags for the XML title attribute (plain text only)
-            title_plain = re.sub(r'<[^>]+>', '', title_text)[:70]
-            safe_title = saxutils.escape(title_plain)
+        if not title_text and title_candidates:
+            title_text = title_candidates[-1][:70]
 
-            xml = f'''<assessmentItem xmlns="http://www.imsglobal.org/xsd/imsqti_v2p1"
+        safe_title = saxutils.escape(title_text)
+
+        xml = f'''<assessmentItem xmlns="http://www.imsglobal.org/xsd/imsqti_v2p1"
 xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
 adaptive="false"
 identifier="{item_id}"
@@ -800,7 +758,7 @@ xsi:schemaLocation="http://www.imsglobal.org/xsd/imsqti_v2p1 http://www.imsgloba
 </responseDeclaration>
 <outcomeDeclaration baseType="float" cardinality="single" identifier="SCORE"/>
 <itemBody>
-<choiceInteraction responseIdentifier="RESPONSE" shuffle="false" maxChoices="1">
+<choiceInteraction responseIdentifier="RESPONSE" shuffle="true" maxChoices="1">
 <prompt>
 <div>
 {stem_html}
@@ -808,61 +766,59 @@ xsi:schemaLocation="http://www.imsglobal.org/xsd/imsqti_v2p1 http://www.imsgloba
 </prompt>
 '''
 
-            for i, opt in enumerate(q["options"]):
-                if i >= len(letters):
-                    break
-                safe = saxutils.escape(opt)
-                safe = safe.replace("&lt;", "<").replace("&gt;", ">")
-                xml += f'<simpleChoice identifier="{letters[i]}">{safe}</simpleChoice>\n'
+        for i, opt in enumerate(q["options"]):
+            if i >= len(letters):
+                break
+            safe = saxutils.escape(opt)
+            xml += f'<simpleChoice identifier="{letters[i]}">{safe}</simpleChoice>\n'
 
-            xml += '''
+        xml += '''
 </choiceInteraction>
 </itemBody>
 <responseProcessing template="http://www.imsglobal.org/question/qti_v2p1/rptemplates/match_correct"/>
 </assessmentItem>
 '''
 
-        else:  # structured
+        with open(filename, "w", encoding="utf-8") as f:
+            f.write(xml)
 
-            answer_text = resolve_answer(q["qnum"])
+        item_refs.append(item_id)
+        imgs = [v for t, v in q["tokens"] if t == "image"]
+        item_images[item_id] = imgs
 
-            item_id  = f"Q{int(q['qnum']):03d}_{random_id()}"
-            filename = os.path.join(items_dir, f"{item_id}.xml")
+    # -----------------------------
+    # STRUCTURED QUESTIONS → QTI
+    # -----------------------------
+    for q in structured_questions:
 
-            stem_html = tokens_to_html(q["tokens"])
+        answer_text = resolve_answer(q["qnum"])
 
-            # SLS-compatible open-ended/essay item:
-            # - responseDeclaration is self-closing (no correctResponse)
-            # - Question HTML placed directly in itemBody as <div> blocks
-            # - <prompt> goes INSIDE <extendedTextInteraction>
-            # - No <responseProcessing> — teacher marks manually in SLS
-            qnum_str = f"Q{int(q['qnum']):03d}"
-            xml = (
-                f'<assessmentItem xmlns="http://www.imsglobal.org/xsd/imsqti_v2p1" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"\n'
-                f'  adaptive="false" identifier="{item_id}" timeDependent="false" title="{qnum_str}"\n'
-                f'  xsi:schemaLocation="http://www.imsglobal.org/xsd/imsqti_v2p1 http://www.imsglobal.org/xsd/qti/qtiv2p1/imsqti_v2p1.xsd">\n'
-                '<responseDeclaration identifier="RESPONSE" cardinality="single" baseType="string">\n'
-                f'  <correctResponse><value>{saxutils.escape(answer_text)}</value></correctResponse>\n'
-                '</responseDeclaration>\n'
-                '<outcomeDeclaration baseType="float" cardinality="single" identifier="SCORE"/>\n'
-                '<outcomeDeclaration identifier="FEEDBACK" cardinality="single" baseType="identifier"/>\n'
-                '<itemBody>\n'
-                f'  <rubricBlock view="scorer"><div>{saxutils.escape(answer_text)}</div></rubricBlock>\n'
-                '  <prompt>\n'
-                f'{stem_html}'
-                '  </prompt>\n'
-                '  <extendedTextInteraction responseIdentifier="RESPONSE" expectedLength="400"/>\n'
-                '</itemBody>\n'
-                '<modalFeedback outcomeIdentifier="FEEDBACK" showHide="show" identifier="modelAnswer" title="Suggested Answer">\n'
-                f'  <div>{saxutils.escape(answer_text)}</div>\n'
-                '</modalFeedback>\n'
-                '<responseProcessing>\n'
-                '  <setOutcomeValue identifier="FEEDBACK">\n'
-                '    <baseValue baseType="identifier">modelAnswer</baseValue>\n'
-                '  </setOutcomeValue>\n'
-                '</responseProcessing>\n'
-                '</assessmentItem>\n'
-            )
+        item_id  = f"Q{int(q['qnum']):03d}_{random_id()}"
+        filename = os.path.join(items_dir, f"{item_id}.xml")
+
+        stem_html = tokens_to_html(q["tokens"])
+
+        xml = f'''<assessmentItem xmlns="http://www.imsglobal.org/xsd/imsqti_v2p1"
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+adaptive="false"
+identifier="{item_id}"
+timeDependent="false"
+title="Q{int(q['qnum']):03d}"
+xsi:schemaLocation="http://www.imsglobal.org/xsd/imsqti_v2p1 http://www.imsglobal.org/xsd/qti/qtiv2p1/imsqti_v2p1.xsd">
+<responseDeclaration identifier="RESPONSE" cardinality="single" baseType="string"/>
+<correctResponse>
+<value>{saxutils.escape(answer_text)}</value>
+</correctResponse>
+<outcomeDeclaration baseType="float" cardinality="single" identifier="SCORE"/>
+<itemBody>
+<prompt>
+{stem_html}
+</prompt>
+<extendedTextInteraction responseIdentifier="RESPONSE" expectedLength="400"/>
+</itemBody>
+<responseProcessing template="http://www.imsglobal.org/question/qti_v2p1/rptemplates/match_correct"/>
+</assessmentItem>
+'''
 
         with open(filename, "w", encoding="utf-8") as f:
             f.write(xml)
@@ -874,9 +830,10 @@ xsi:schemaLocation="http://www.imsglobal.org/xsd/imsqti_v2p1 http://www.imsgloba
     # -----------------------------
     # assessment_test.xml
     # -----------------------------
-    assessment_xml = '''<assessmentTest xmlns="http://www.imsglobal.org/xsd/imsqti_v2p1" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-  identifier="TEST1" title="Converted Test"
-  xsi:schemaLocation="http://www.imsglobal.org/xsd/imsqti_v2p1 http://www.imsglobal.org/xsd/qti/qtiv2p1/imsqti_v2p1.xsd">
+    assessment_xml = '''
+<assessmentTest xmlns="http://www.imsglobal.org/xsd/imsqti_v2p1"
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+identifier="TEST1" title="Converted Test" xsi:schemaLocation="http://www.imsglobal.org/xsd/imsqti_v2p1 http://www.imsglobal.org/xsd/qti/qtiv2p1/imsqti_v2p1.xsd">
 <testPart identifier="part1" navigationMode="linear" submissionMode="individual">
 <assessmentSection identifier="section1" title="Converted Test" visible="true">
 '''
@@ -896,13 +853,21 @@ xsi:schemaLocation="http://www.imsglobal.org/xsd/imsqti_v2p1 http://www.imsgloba
     # -----------------------------
     # imsmanifest.xml
     # -----------------------------
-    manifest = '''<manifest xmlns="http://www.imsglobal.org/xsd/imscp_v1p1"
-  xmlns:imsmd="http://www.imsglobal.org/xsd/imsmd_v1p2"
-  xmlns:imsqti="http://www.imsglobal.org/xsd/imsqti_metadata_v2p1"
-  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-  identifier="MANIFEST1"
-  xsi:schemaLocation="http://www.imsglobal.org/xsd/imscp_v1p1 http://www.imsglobal.org/xsd/imscp_v1p1.xsd">
-<metadata><schema>QTIv2.1 Package</schema><schemaversion>1.0.0</schemaversion></metadata>
+    manifest = '''
+<manifest
+xmlns="http://www.imsglobal.org/xsd/imscp_v1p1"
+xmlns:imsmd="http://www.imsglobal.org/xsd/imsmd_v1p2"
+xmlns:imsqti="http://www.imsglobal.org/xsd/imsqti_metadata_v2p1"
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+identifier="MANIFEST1"
+xsi:schemaLocation="
+http://www.imsglobal.org/xsd/imscp_v1p1 http://www.imsglobal.org/xsd/imscp_v1p1.xsd
+http://www.imsglobal.org/xsd/imsmd_v1p2 http://www.imsglobal.org/xsd/imsmd_v1p2p4.xsd
+http://www.imsglobal.org/xsd/imsqti_metadata_v2p1 http://www.imsglobal.org/xsd/qti/qtiv2p1/imsqti_metadata_v2p1.xsd">
+<metadata>
+<schema>QTIv2.1 Package</schema>
+<schemaversion>1.0.0</schemaversion>
+</metadata>
 <organizations/>
 <resources>
 '''
