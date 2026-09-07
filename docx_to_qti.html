@@ -3,13 +3,29 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>DOCX → QTI Converter</title>
+  <title>DOCX → QTI about 75% Converter — human in the loop</title>
   <!-- Google Fonts: Noto Sans SC (Chinese) + Noto Sans Tamil for multilingual rendering -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;700&family=Noto+Sans+Tamil:wght@400;700&display=swap" rel="stylesheet">
   <!-- JSZip: reads .docx (which is a ZIP) and writes the output ZIP — no server needed -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <!-- Privacy-conscious GA4: asynchronous, no advertising signals, and disabled for Do Not Track. -->
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    window.gtag = window.gtag || function () { dataLayer.push(arguments); };
+    if (navigator.doNotTrack !== '1') {
+      const gaScript = document.createElement('script');
+      gaScript.async = true;
+      gaScript.src = 'https://www.googletagmanager.com/gtag/js?id=G-S9EWRY1CPJ';
+      document.head.appendChild(gaScript);
+      gtag('js', new Date());
+      gtag('config', 'G-S9EWRY1CPJ', {
+        allow_google_signals: false,
+        allow_ad_personalization_signals: false
+      });
+    }
+  </script>
 
   <style>
     body {
@@ -23,15 +39,199 @@
     }
     .container {
       width: 100%;
-      max-width: 100%;
-      background: white;
-      padding: 30px 48px;
+      max-width: 1500px;
+      margin: 0 auto;
+      background: transparent;
+      padding: 24px 34px 30px;
       border-radius: 0;
       box-shadow: none;
       box-sizing: border-box;
     }
     h1  { text-align: center; margin-bottom: 5px; }
     .subtitle { text-align: center; color: #666; margin-bottom: 25px; }
+
+    /* ── Conversion hero ─────────────────────────────────────────────── */
+    .converter-hero {
+      display: grid;
+      grid-template-columns: minmax(340px, .9fr) minmax(520px, 1.3fr);
+      min-height: 520px;
+      overflow: hidden;
+      border: 1px solid #173451;
+      background: #071a2b;
+      color: #f8fafc;
+      box-shadow: 0 22px 60px rgba(7, 26, 43, .16);
+    }
+    .hero-copy {
+      position: relative;
+      z-index: 2;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      padding: clamp(32px, 4vw, 68px);
+    }
+    .hero-eyebrow {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin: 0 0 22px;
+      color: #7dd3fc;
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: .15em;
+      text-transform: uppercase;
+    }
+    .hero-eyebrow::before { content: ''; width: 30px; height: 2px; background: #38bdf8; }
+    .converter-hero h1 {
+      max-width: 690px;
+      margin: 0;
+      color: #fff;
+      font-size: clamp(42px, 5vw, 76px);
+      line-height: .99;
+      letter-spacing: -.045em;
+      text-align: left;
+    }
+    .converter-hero h1 span { display: block; color: #7dd3fc; }
+    .hero-lede {
+      max-width: 590px;
+      margin: 24px 0 0;
+      color: #cbd5e1;
+      font-size: clamp(17px, 1.55vw, 22px);
+      line-height: 1.55;
+    }
+    .hero-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 28px; }
+    .hero-replay,
+    .hero-guide-link {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 44px;
+      border: 1px solid transparent;
+      padding: 0 17px;
+      color: #fff;
+      font: inherit;
+      font-size: 14px;
+      font-weight: 750;
+      text-decoration: none;
+      cursor: pointer;
+    }
+    .hero-replay { width: auto; margin: 0; background: #2563eb; }
+    .hero-replay:hover { background: #1d4ed8; }
+    .hero-guide-link { border-color: #37546d; background: transparent; }
+    .hero-guide-link:hover { border-color: #7dd3fc; background: #0b253c; }
+    .hero-privacy {
+      display: flex;
+      gap: 9px;
+      align-items: flex-start;
+      margin-top: 24px;
+      color: #9fb1c3;
+      font-size: 13px;
+      line-height: 1.45;
+    }
+    .hero-privacy svg { flex: 0 0 auto; margin-top: 1px; }
+    .hero-visual { position: relative; min-width: 0; min-height: 520px; overflow: hidden; background: #071a2b; }
+    #conversionHero3d { position: absolute; inset: 0; outline: none; }
+    #conversionHero3d:focus-visible { box-shadow: inset 0 0 0 3px #7dd3fc; }
+    #conversionHero3d canvas { display: block; width: 100%; height: 100%; }
+    #conversionHero3d.is-fallback::before {
+      content: 'DOCX  →  Parse & structure  →  QTI 2.1';
+      position: absolute;
+      inset: 45% 8% auto;
+      color: #7dd3fc;
+      font-weight: 800;
+      text-align: center;
+      letter-spacing: .04em;
+    }
+    .hero-stage-labels {
+      position: absolute;
+      inset: 22px 20px auto;
+      z-index: 2;
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 10px;
+      pointer-events: none;
+    }
+    .hero-stage-labels span { color: #dbeafe; font-size: 12px; font-weight: 750; text-align: center; text-shadow: 0 2px 10px #071a2b; }
+    .hero-live-state {
+      position: absolute;
+      right: 22px;
+      bottom: 20px;
+      z-index: 3;
+      max-width: 440px;
+      margin: 0;
+      border-left: 3px solid #38bdf8;
+      background: rgba(7, 26, 43, .88);
+      padding: 10px 13px;
+      color: #dbeafe;
+      font-size: 12px;
+      line-height: 1.45;
+      pointer-events: none;
+    }
+    .upload-panel {
+      display: grid;
+      grid-template-columns: minmax(0, 1.55fr) minmax(300px, .85fr);
+      gap: 16px;
+      margin: 18px 0 0;
+      border: 1px solid #d7d9d9;
+      background: #fff;
+      padding: 18px;
+      box-shadow: 0 12px 34px rgba(15, 23, 42, .07);
+    }
+    .upload-panel .drop-zone,
+    .upload-panel .ms-zone {
+      display: flex;
+      min-height: 112px;
+      box-sizing: border-box;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      margin: 0;
+      padding: 22px;
+    }
+    .upload-kicker { color: #64748b; font-size: 12px; font-weight: 750; letter-spacing: .08em; text-transform: uppercase; }
+    .upload-title { display: block; margin-top: 5px; color: #102235; font-size: 18px; font-weight: 800; }
+    .upload-hint { display: block; margin-top: 3px; color: #64748b; font-size: 13px; }
+
+    .tutorial-video-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(180px, 260px);
+      gap: 22px;
+      align-items: start;
+      margin-bottom: 24px;
+    }
+    .tutorial-video-main {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 16 / 9;
+      overflow: hidden;
+      border-radius: 10px;
+      background: #111827;
+      box-shadow: 0 2px 12px rgba(0,0,0,.15);
+    }
+    .tutorial-video-main iframe {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      border: 0;
+    }
+    .shorts-frame {
+      position: relative;
+      width: 100%;
+      max-width: 260px;
+      aspect-ratio: 9 / 16;
+      margin: 0 auto;
+      overflow: hidden;
+      border-radius: 14px;
+      background: #111827;
+      box-shadow: 0 4px 16px rgba(15, 23, 42, .22);
+    }
+    .shorts-frame iframe {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      border: 0;
+    }
 
     /* ── Drop zones ─────────────────────────────────────────────────── */
     .drop-zone {
@@ -139,6 +339,375 @@
       border-radius: 0 8px 8px 0;
       padding: 14px 18px; margin: 18px 0;
       font-size: 15px; color: #0c4a6e; line-height: 1.7;
+    }
+
+    /* ── Featured sample download ─────────────────────────────────────── */
+    .sample-feature-card {
+      margin: 14px 0 20px;
+      padding: 18px 20px;
+      border: 1px solid #bae6fd;
+      border-left: 5px solid #0284c7;
+      border-radius: 12px;
+      background: linear-gradient(135deg, #f0f9ff 0%, #ecfeff 100%);
+      box-shadow: 0 4px 14px rgba(14, 116, 144, .08);
+    }
+    .sample-feature-badge {
+      display: inline-block;
+      margin-bottom: 8px;
+      padding: 3px 9px;
+      border-radius: 999px;
+      background: #0e7490;
+      color: #fff;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: .05em;
+      text-transform: uppercase;
+    }
+    .sample-feature-card h3 {
+      margin: 0 0 7px;
+      color: #0c4a6e;
+      font-size: 18px;
+      line-height: 1.35;
+    }
+    .sample-feature-card p {
+      margin: 0 0 9px;
+      color: #334155;
+      font-size: 14px;
+      line-height: 1.6;
+    }
+    .sample-feature-card .sample-feature-meta {
+      color: #0e7490;
+      font-size: 13px;
+    }
+    .sample-download-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      margin-top: 3px;
+      padding: 9px 13px;
+      border-radius: 8px;
+      background: #0369a1;
+      color: #fff;
+      font-size: 14px;
+      font-weight: 700;
+      text-decoration: none;
+    }
+    .sample-download-link:hover,
+    .sample-download-link:focus-visible {
+      background: #075985;
+      outline: 3px solid rgba(14, 165, 233, .28);
+      outline-offset: 2px;
+    }
+
+    /* ── Live activity & reach dashboard ──────────────────────────────── */
+    .activity-section {
+      width: min(1420px, calc(100% - 48px));
+      margin: 54px auto 28px;
+      padding: 32px;
+      box-sizing: border-box;
+      border: 1px solid #dbeafe;
+      border-radius: 20px;
+      background: #f7f5ef;
+      color: #102235;
+      box-shadow: 0 18px 52px rgba(30, 64, 175, .08);
+      color: #0f172a;
+    }
+    .activity-section * { box-sizing: border-box; }
+    .activity-heading-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 24px;
+      align-items: flex-start;
+      margin-bottom: 22px;
+    }
+    .activity-heading-row h2 {
+      margin: 0 0 7px;
+      font-size: clamp(25px, 3vw, 34px);
+      line-height: 1.1;
+      letter-spacing: -.025em;
+      color: #0f244a;
+    }
+    .activity-privacy {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      max-width: 720px;
+      margin: 0;
+      color: #64748b;
+      font-size: 13px;
+      line-height: 1.55;
+    }
+    .activity-privacy svg { flex: 0 0 auto; margin-top: 1px; }
+    .activity-live {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      margin-top: 10px;
+      color: #0f766e;
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .activity-live-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #10b981;
+      box-shadow: 0 0 0 5px rgba(16, 185, 129, .13);
+      animation: activityPulse 2s ease-out infinite;
+    }
+    @keyframes activityPulse {
+      0%, 100% { box-shadow: 0 0 0 4px rgba(16, 185, 129, .12); }
+      50% { box-shadow: 0 0 0 8px rgba(16, 185, 129, 0); }
+    }
+    .activity-filter {
+      min-width: 190px;
+    }
+    .activity-filter label {
+      display: block;
+      margin-bottom: 6px;
+      color: #475569;
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .activity-filter select {
+      width: 100%;
+      min-height: 42px;
+      padding: 8px 34px 8px 11px;
+      border: 1px solid #cbd5e1;
+      border-radius: 9px;
+      background: #fff;
+      color: #0f172a;
+      font: inherit;
+      font-size: 14px;
+    }
+    .activity-filter select:focus-visible {
+      outline: 3px solid rgba(37, 99, 235, .2);
+      border-color: #2563eb;
+    }
+    .activity-metrics {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+    .activity-metric {
+      position: relative;
+      min-height: 112px;
+      padding: 15px 14px 14px 58px;
+      border: 1px solid #dbe3ef;
+      border-radius: 13px;
+      background: #fff;
+      box-shadow: 0 5px 16px rgba(15, 23, 42, .045);
+    }
+    .activity-metric-icon {
+      position: absolute;
+      top: 15px;
+      left: 14px;
+      display: grid;
+      place-items: center;
+      width: 34px;
+      height: 34px;
+      border-radius: 11px;
+      background: #eff6ff;
+      color: #2563eb;
+    }
+    .activity-metric-icon svg { width: 19px; height: 19px; }
+    .activity-metric-label {
+      display: block;
+      color: #475569;
+      font-size: 12px;
+      font-weight: 700;
+      line-height: 1.3;
+    }
+    .activity-metric-value {
+      display: block;
+      margin-top: 7px;
+      color: #0f244a;
+      font-size: clamp(24px, 2.4vw, 31px);
+      font-weight: 800;
+      line-height: 1;
+      font-variant-numeric: tabular-nums;
+    }
+    .activity-metric-note {
+      display: block;
+      margin-top: 7px;
+      color: #94a3b8;
+      font-size: 10px;
+      line-height: 1.25;
+    }
+    .activity-layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1.45fr) minmax(320px, .85fr);
+      gap: 14px;
+      align-items: stretch;
+    }
+    .activity-globe-panel,
+    .activity-side-panel {
+      border: 1px solid #dbe3ef;
+      border-radius: 15px;
+      background: #fbfdff;
+      overflow: hidden;
+    }
+    .activity-globe-panel {
+      position: relative;
+      min-height: 540px;
+      padding: 18px;
+      background:
+        radial-gradient(circle at 50% 52%, rgba(191, 219, 254, .62), rgba(239, 246, 255, .35) 36%, rgba(255,255,255,.92) 70%),
+        #fbfdff;
+    }
+    .activity-panel-title {
+      position: relative;
+      z-index: 2;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin: 0;
+      color: #142b52;
+      font-size: 16px;
+    }
+    .activity-panel-title svg { color: #2563eb; }
+    .activity-globe-help {
+      position: relative;
+      z-index: 2;
+      margin: 6px 0 0 26px;
+      color: #64748b;
+      font-size: 11px;
+    }
+    #activityGlobe {
+      position: absolute;
+      inset: 52px 0 0;
+      width: 100%;
+      height: calc(100% - 52px);
+      cursor: grab;
+      touch-action: none;
+      outline: none;
+    }
+    #activityGlobe:active { cursor: grabbing; }
+    #activityGlobe:focus-visible { box-shadow: inset 0 0 0 3px rgba(37, 99, 235, .3); }
+    .activity-globe-fallback {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: min(54vw, 330px);
+      aspect-ratio: 1;
+      transform: translate(-50%, -43%);
+      border: 1px solid #60a5fa;
+      border-radius: 50%;
+      background:
+        repeating-radial-gradient(ellipse at center, transparent 0 28px, rgba(37,99,235,.12) 29px 30px),
+        repeating-linear-gradient(90deg, transparent 0 47px, rgba(37,99,235,.1) 48px 49px),
+        radial-gradient(circle at 35% 30%, #eff6ff, #93c5fd 72%, #3b82f6);
+      box-shadow: 0 22px 45px rgba(37, 99, 235, .2);
+    }
+    .activity-globe-fallback[hidden] { display: none; }
+    .activity-side-panel {
+      display: flex;
+      flex-direction: column;
+      background: #fff;
+    }
+    .activity-side-section { padding: 17px 18px; }
+    .activity-side-section + .activity-side-section { border-top: 1px solid #e2e8f0; }
+    .activity-country-list,
+    .activity-feed {
+      list-style: none;
+      margin: 13px 0 0;
+      padding: 0;
+    }
+    .activity-country-row {
+      display: grid;
+      grid-template-columns: minmax(92px, 1fr) minmax(90px, 1.35fr) auto;
+      gap: 10px;
+      align-items: center;
+      min-height: 27px;
+      color: #334155;
+      font-size: 12px;
+    }
+    .activity-country-bar {
+      height: 6px;
+      overflow: hidden;
+      border-radius: 999px;
+      background: #dbeafe;
+    }
+    .activity-country-bar span {
+      display: block;
+      height: 100%;
+      min-width: 4px;
+      border-radius: inherit;
+      background: linear-gradient(90deg, #06b6d4, #2563eb);
+    }
+    .activity-country-count {
+      color: #64748b;
+      font-variant-numeric: tabular-nums;
+    }
+    .activity-empty {
+      margin: 14px 0 0;
+      color: #94a3b8;
+      font-size: 12px;
+      line-height: 1.5;
+    }
+    .activity-trend {
+      display: flex;
+      align-items: flex-end;
+      gap: 5px;
+      height: 82px;
+      margin-top: 12px;
+    }
+    .activity-trend-button {
+      all: unset;
+      display: flex;
+      flex: 1 1 0;
+      min-width: 12px;
+      height: 100%;
+      flex-direction: column;
+      justify-content: flex-end;
+      align-items: center;
+      gap: 5px;
+      cursor: pointer;
+    }
+    .activity-trend-bar {
+      width: min(100%, 24px);
+      min-height: 4px;
+      border-radius: 5px 5px 2px 2px;
+      background: #93c5fd;
+      transition: height .25s ease, background .2s;
+    }
+    .activity-trend-button[aria-current="true"] .activity-trend-bar { background: #2563eb; }
+    .activity-trend-label {
+      color: #94a3b8;
+      font-size: 9px;
+      line-height: 1;
+    }
+    .activity-trend-button:focus-visible .activity-trend-bar { outline: 3px solid rgba(37, 99, 235, .25); }
+    .activity-feed { display: grid; gap: 9px; }
+    .activity-feed li {
+      display: grid;
+      grid-template-columns: 9px 62px 1fr;
+      gap: 8px;
+      align-items: start;
+      color: #334155;
+      font-size: 11px;
+      line-height: 1.35;
+    }
+    .activity-feed-dot {
+      width: 7px;
+      height: 7px;
+      margin-top: 4px;
+      border-radius: 50%;
+      background: #2563eb;
+    }
+    .activity-feed li:nth-child(2n) .activity-feed-dot { background: #f59e0b; }
+    .activity-feed li:nth-child(3n) .activity-feed-dot { background: #10b981; }
+    .activity-feed-time { color: #94a3b8; }
+    .activity-status {
+      margin: 13px 0 0;
+      color: #64748b;
+      font-size: 11px;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .activity-live-dot { animation: none; }
+      .activity-trend-bar { transition: none; }
     }
 
     /* ── FAQ section ─────────────────────────────────────────────────── */
@@ -414,12 +983,79 @@
     }
     .btn-reset:hover { background: #4b5563 !important; }
     .btn-export:disabled { opacity: .5; cursor: not-allowed; }
+    @media (max-width: 1080px) {
+      .converter-hero { grid-template-columns: 1fr; }
+      .hero-copy { padding-bottom: 24px; }
+      .converter-hero h1 { max-width: 780px; }
+      .hero-visual { min-height: 430px; }
+    }
+    @media (max-width: 720px) {
+      .container { padding: 20px 14px; }
+      .converter-hero { min-height: 0; }
+      .hero-copy { padding: 30px 22px 20px; }
+      .converter-hero h1 { font-size: clamp(39px, 12vw, 55px); }
+      .hero-lede { margin-top: 18px; font-size: 17px; }
+      .hero-actions { align-items: stretch; margin-top: 22px; }
+      .hero-replay, .hero-guide-link { flex: 1 1 180px; }
+      .hero-visual { min-height: 345px; }
+      .hero-stage-labels { inset: 15px 8px auto; }
+      .hero-stage-labels span { font-size: 10px; }
+      .hero-live-state { right: 12px; bottom: 11px; left: 12px; max-width: none; }
+      .upload-panel { grid-template-columns: 1fr; padding: 12px; }
+      .upload-panel .drop-zone, .upload-panel .ms-zone { min-height: 118px; padding: 18px 12px; }
+      .tutorial-video-grid { grid-template-columns: 1fr; }
+      .shorts-frame { width: min(100%, 220px); }
+      .activity-section {
+        width: calc(100% - 20px);
+        margin-top: 34px;
+        padding: 20px 14px;
+        border-radius: 15px;
+      }
+      .activity-heading-row { display: block; }
+      .activity-filter { margin-top: 18px; min-width: 0; }
+      .activity-metrics { grid-template-columns: 1fr 1fr; }
+      .activity-metric { min-height: 104px; padding-left: 55px; }
+      .activity-metric:last-child { grid-column: 1 / -1; }
+      .activity-layout { grid-template-columns: 1fr; }
+      .activity-globe-panel { min-height: 410px; }
+      .activity-side-panel { min-width: 0; }
+      .activity-country-row { grid-template-columns: minmax(86px, 1fr) minmax(70px, 1fr) auto; }
+      .activity-feed li { grid-template-columns: 9px 54px 1fr; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; }
+    }
   </style>
 </head>
 <body>
 
 <div class="container">
-  <h1>DOCX → QTI Converter
+  <section class="converter-hero" aria-labelledby="converterTitle">
+    <div class="hero-copy">
+      <p class="hero-eyebrow">DOCX → QTI 2.1 converter</p>
+      <h1 id="converterTitle">Turn Word papers into <span>SLS-ready QTI</span></h1>
+      <p class="hero-lede">About 75% automated. You review the final 25% before a standards-ready package is exported.</p>
+      <div class="hero-actions">
+        <button type="button" class="hero-replay" id="heroReplayBtn">▶ Preview the 3D flow</button>
+        <a class="hero-guide-link" href="https://www.youtube.com/watch?v=0KFOVRdJfX0" target="_blank" rel="noopener">Watch the 2-minute guide ↗</a>
+      </div>
+      <p class="hero-privacy">
+        <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 1a5 5 0 0 0-5 5v3H5a2 2 0 0 0-2 2v10h18V11a2 2 0 0 0-2-2h-2V6a5 5 0 0 0-5-5Zm-3 8V6a3 3 0 1 1 6 0v3H9Zm3 4a2 2 0 0 1 1 3.73V19h-2v-2.27A2 2 0 0 1 12 13Z"/></svg>
+        <span>Runs entirely in your browser — no server, no document uploads. Supports English, Chinese and Tamil fonts.</span>
+      </p>
+    </div>
+    <div class="hero-visual">
+      <div id="conversionHero3d" role="img" tabindex="0" aria-label="Interactive 3D process: Word document pages pass through a parsing core and become QTI assessment cards. Use left and right arrow keys to change the view."></div>
+      <div class="hero-stage-labels" aria-hidden="true">
+        <span>01 · Word document</span>
+        <span>02 · Parse &amp; structure</span>
+        <span>03 · QTI 2.1 package</span>
+      </div>
+      <p class="hero-live-state" id="conversionHeroState" aria-live="polite">A private, browser-only transformation. No document is uploaded.</p>
+    </div>
+  </section>
+
+  <h1 hidden>DOCX → QTI about 75% Converter
     <a href="https://www.youtube.com/watch?v=0KFOVRdJfX0" target="_blank" rel="noopener"
        title="Watch tutorial on YouTube"
        style="display:inline-flex;align-items:center;gap:6px;margin-left:12px;
@@ -436,57 +1072,59 @@
       </svg>
       How to use
     </a>
+    <a href="https://youtube.com/shorts/haFKKYHYwUY?feature=share" target="_blank" rel="noopener"
+       title="Watch Shorts walkthrough on YouTube"
+       style="display:inline-flex;align-items:center;gap:6px;margin-left:12px;
+              vertical-align:middle;text-decoration:none;
+              background:#ff0000;color:#fff;
+              font-size:13px;font-weight:600;letter-spacing:.3px;
+              padding:5px 11px 5px 8px;border-radius:6px;
+              box-shadow:0 1px 4px rgba(0,0,0,.25);
+              transition:background .15s,transform .1s;"
+       onmouseover="this.style.background='#cc0000';this.style.transform='translateY(-1px)'"
+       onmouseout="this.style.background='#ff0000';this.style.transform='translateY(0)'">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="white" xmlns="http://www.w3.org/2000/svg">
+        <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+      </svg>
+      How it works
+    </a>
   </h1>
-  <div class="subtitle">Upload a formatted Word document and get a ready‑to‑import QTI 2.1 package — supports English, Chinese &amp; Tamil fonts<br>
-    <small style="color:#888">Runs entirely in your browser — no server, no uploads</small>
+  <div class="subtitle" hidden>Upload a formatted Word document and get a ready‑to‑import QTI 2.1 package — supports English, Chinese &amp; Tamil fonts<br>
+    <small style="color:#888">Runs entirely in your browser — no server, no uploads. The remaining 25% needs human-in-the-loop review.</small>
   </div>
 
+  <div class="upload-panel" aria-label="Choose converter input files">
   <!-- Question paper (required) -->
   <div id="dropZone" class="drop-zone">
-    Drag &amp; drop your question paper (.docx) here<br>or click to select
+    <span class="upload-kicker">Required input</span>
+    <span class="upload-title">Choose a question paper (.docx)</span>
+    <span class="upload-hint">Drag and drop it here, or click to browse</span>
     <div id="fileName" class="filename"></div>
   </div>
   <input type="file" id="fileInput" accept=".docx" hidden>
 
   <!-- Mark scheme (optional) -->
   <div id="msDropZone" class="ms-zone">
-    ➕ Add mark scheme (.docx) — optional
+    <span class="upload-kicker">Optional input</span>
+    <span class="upload-title">Add a mark scheme (.docx)</span>
+    <span class="upload-hint">Adds correct answers when the format can be read</span>
     <span class="ms-badge">injects correct answers</span>
     <div id="msFileName" class="filename"></div>
   </div>
   <input type="file" id="msFileInput" accept=".docx" hidden>
+  </div>
 
   <!-- Quick-load test files (dev convenience) -->
   <details id="quickLoad">
     <summary>🧪 Quick Load — test files</summary>
     <div class="ql-grid">
-      <button class="ql-btn" data-qp="files/doc/2022 JC2 H1 Physics Prelim P1.docx"
-                              data-ms="files/doc/2022 JC2 H1 Physics Prelim P1 MS.docx"
+      <button class="ql-btn" data-qp="files/doc/2024 OPS P6 FMA CT1 1A.docx"
+                              data-ms="files/doc/2024 OPS P6 FMA CT1 Answer Key.docx"
                               data-mcq="1">
-        <strong>H1 P1</strong>2022 JC2 · 30 MCQ
+        <strong>P6 Foundation Mathematics</strong>2024 OPS CT1 · MCQ with answer key
       </button>
-      <button class="ql-btn" data-qp="files/doc/2022 JC2 H1 Physics Prelim P2.docx"
-                              data-ms="files/doc/2022 JC2 H1 Physics Prelim P2 MS.docx">
-        <strong>H1 P2</strong>2022 JC2 · Structured
-      </button>
-      <button class="ql-btn" data-qp="files/doc/2022 JC2 H2 Physics Prelim P1.docx"
-                              data-ms="files/doc/2022 JC2 H2 Physics Prelim P1 MS (for sharing with other colleges).docx"
-                              data-mcq="1">
-        <strong>H2 P1</strong>2022 JC2 · 30 MCQ
-      </button>
-      <button class="ql-btn" data-qp="files/doc/2022 JC2 H2 Physics Prelim P2 .docx"
-                              data-ms="files/doc/2022 JC2 H2 Physics Prelim P2 MS (for sharing with other colleges).docx">
-        <strong>H2 P2</strong>2022 JC2 · Structured
-      </button>
-      <button class="ql-btn" data-qp="files/doc/2022 JC2 H2 Physics Prelim P3.docx"
-                              data-ms="files/doc/2022 JC2 H2 Physics Prelim P3 MS (for sharing with other colleges).docx">
-        <strong>H2 P3</strong>2022 JC2 · Structured
-      </button>
-      <button class="ql-btn" data-qp="files/doc/questions_tested_lawrence.docx">
-        <strong>Lawrence sample</strong>Inline-numbered MCQ · 2 Qs
-      </button>
-      <button class="ql-btn" data-qp="files/doc/questions2_tested_by_harley.docx">
-        <strong>Harley sample</strong>Auto-list MCQ (numPr) · 2 Qs
+      <button class="ql-btn" data-qp="files/doc/2020 P6 CL SA1 Revision 1.docx">
+        <strong>P6 Chinese</strong>2020 SA1 revision · repository fixture
       </button>
     </div>
     <div class="ql-status" id="qlStatus"></div>
@@ -601,6 +1239,15 @@
       <li><a href="samples/2022 JC2 H2 Physics Prelim P2 .zip" download>2022 JC2 H2 Physics Prelim P2.zip</a></li>
       <li><a href="samples/2022 JC2 H2 Physics Prelim P3.zip" download>2022 JC2 H2 Physics Prelim P3.zip</a></li>
     </ul>
+    <section class="sample-feature-card" aria-labelledby="jasin-ricca-chemistry-title">
+      <span class="sample-feature-badge">New chemistry contribution</span>
+      <h3 id="jasin-ricca-chemistry-title">2025 Secondary 4 Express Chemistry Preliminary Paper 1</h3>
+      <p class="sample-feature-meta">Contributed by <strong>Jasin Ricca</strong> on <time datetime="2026-08-22">August 22, 2026</time> · 40 MCQs · answer key included</p>
+      <p>Victoria School preliminary examination converted into a ready-to-import QTI 2.1 package for SLS.</p>
+      <a class="sample-download-link" href="files/qticonvert/jasinRicca/2025 S4Express Prelim Paper 1.zip" download>
+        Download QTI ZIP <span aria-hidden="true">↓</span>
+      </a>
+    </section>
     <p style="color:#555;font-size:13px;margin-top:12px;margin-bottom:6px"><strong>Singapore Biology prelim papers (with AI-generated model answers):</strong></p>
     <ul>
       <li><a href="samples/AMKSS_2025 Prelim P4 Biology Qns with Answers.zip" download>AMKSS 2025 Prelim P4 Biology Qns with Answers.zip</a> — structured/essay paper with model answers injected via Claude Code
@@ -636,18 +1283,45 @@
     <p style="color:#555;font-size:13px;margin-top:12px;margin-bottom:6px"><strong>Singapore Primary 6 Mathematics papers &mdash; contributed by Safiah:</strong></p>
     <ul>
       <li><a href="samples/2024 OPS P6 FMA CT1 1A.zip" download>2024 OPS P6 FMA CT1 1A.zip</a> - Primary 6 Foundation Mathematics CT1 sample with MCQ options and answer key</li>
+      <li><a href="files/qticonvert/safiah/average.zip" download>average.zip</a> - Primary 6 Mathematics average MCQ practice contributed by Safiah</li>
     </ul>
 
-    <h2>Tutorial Video</h2>
-    <div style="position:relative;padding-bottom:56.25%;height:0;overflow:hidden;border-radius:10px;box-shadow:0 2px 12px rgba(0,0,0,.15);margin-bottom:24px;">
-      <iframe
-        src="https://www.youtube.com/embed/0KFOVRdJfX0"
-        title="DOCX to QTI Converter — How to use"
-        frameborder="0"
-        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-        allowfullscreen
-        style="position:absolute;top:0;left:0;width:100%;height:100%;border-radius:10px;">
-      </iframe>
+    <p style="color:#555;font-size:13px;margin-top:12px;margin-bottom:6px"><strong>Singapore Primary 4 English worksheets &amp; practice papers &mdash; contributed by Jessica:</strong>
+      <br><span style="color:#6b7280;font-size:11.5px;">Added 12 May 2026 &mdash; tracked as Jessica contribution batch 1.</span>
+    </p>
+    <ul>
+      <li><a href="files/qticonvert/jessicaTeo/S&amp;T Ex 1_because, as, since (2026).zip" download>S&amp;T Ex 1_because, as, since (2026).zip</a> - Synthesis &amp; Transformation exercise</li>
+      <li><a href="files/qticonvert/jessicaTeo/S&amp;T Ex 2_both, and (2026).zip" download>S&amp;T Ex 2_both, and (2026).zip</a> - Synthesis &amp; Transformation exercise</li>
+      <li><a href="files/qticonvert/jessicaTeo/S&amp;T Ex 3_when (2026).zip" download>S&amp;T Ex 3_when (2026).zip</a> - Synthesis &amp; Transformation exercise</li>
+      <li><a href="files/qticonvert/jessicaTeo/S&amp;T Ex 4_Active to Passive Voice (2026).zip" download>S&amp;T Ex 4_Active to Passive Voice (2026).zip</a> - Synthesis &amp; Transformation exercise</li>
+      <li><a href="files/qticonvert/jessicaTeo/Topical Practice 1 (2026).zip" download>Topical Practice 1 (2026).zip</a> - Primary 4 English topical MCQ practice</li>
+      <li><a href="files/qticonvert/jessicaTeo/Topical Practice 2 (2026).zip" download>Topical Practice 2 (2026).zip</a> - Primary 4 English topical MCQ practice</li>
+      <li><a href="files/qticonvert/jessicaTeo/Topical Practice 3 (2026).zip" download>Topical Practice 3 (2026).zip</a> - Primary 4 English grammar cloze practice</li>
+      <li><a href="files/qticonvert/jessicaTeo/P4 EL Practice Paper 3 (2020 GMSP SA2).zip" download>P4 EL Practice Paper 3 (2020 GMSP SA2).zip</a> - Primary 4 English practice paper</li>
+      <li><a href="files/qticonvert/jessicaTeo/P4 EL Practice Paper 4 (2022 GMSP SA1).zip" download>P4 EL Practice Paper 4 (2022 GMSP SA1).zip</a> - Primary 4 English practice paper</li>
+      <li><a href="files/qticonvert/jessicaTeo/P4 EL Practice Paper 7 (2024 GMSP SA2).zip" download>P4 EL Practice Paper 7 (2024 GMSP SA2).zip</a> - Primary 4 English practice paper</li>
+    </ul>
+
+    <h2>Tutorial Videos</h2>
+    <div class="tutorial-video-grid" aria-label="DOCX to QTI tutorial videos">
+      <div class="tutorial-video-main">
+        <iframe
+          src="https://www.youtube.com/embed/0KFOVRdJfX0"
+          title="DOCX to QTI Converter - How to use"
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+          allowfullscreen>
+        </iframe>
+      </div>
+      <div class="shorts-frame">
+        <iframe
+          src="https://www.youtube-nocookie.com/embed/haFKKYHYwUY?rel=0"
+          title="DOCX to QTI Converter - How it works Shorts"
+          loading="lazy"
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+          referrerpolicy="strict-origin-when-cross-origin"
+          allowfullscreen>
+        </iframe>
+      </div>
     </div>
 
     <h2>Resources</h2>
@@ -802,6 +1476,106 @@
 
 <script>
 // ─────────────────────────────────────────────────────────────────────────────
+// Anonymous activity bridge
+// Records only aggregate event labels. Files, filenames, content, names and IP
+// addresses are never sent by this converter.
+// ─────────────────────────────────────────────────────────────────────────────
+const qtiActivity = (() => {
+  const endpoint = new URL('activity.php', location.href).href;
+  const disabled = location.protocol === 'file:' || navigator.doNotTrack === '1';
+  const listeners = new Set();
+  let started = false;
+
+  function anonymousSession() {
+    const key = 'qtiActivitySessionV1';
+    try {
+      let value = localStorage.getItem(key);
+      if (!value) {
+        value = (crypto.randomUUID ? crypto.randomUUID() :
+          `${Date.now()}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`);
+        localStorage.setItem(key, value);
+      }
+      return value;
+    } catch (_) {
+      return `${Date.now()}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`;
+    }
+  }
+
+  const session = anonymousSession();
+  const locale = navigator.language || '';
+  const localeCountry = (locale.match(/[-_]([A-Za-z]{2})\b/) || [])[1] || 'UN';
+
+  function notify(data) {
+    listeners.forEach(listener => listener(data));
+  }
+
+  async function request(method, body) {
+    const options = {
+      method,
+      credentials: 'same-origin',
+      cache: 'no-store',
+      headers: { Accept: 'application/json' }
+    };
+    if (body) {
+      options.headers['Content-Type'] = 'application/json';
+      options.body = JSON.stringify(body);
+      options.keepalive = true;
+    }
+    const response = await fetch(endpoint, options);
+    if (!response.ok) throw new Error(`Activity service returned ${response.status}`);
+    const data = await response.json();
+    notify(data);
+    return data;
+  }
+
+  async function refresh() {
+    try { return await request('GET'); }
+    catch (_) { notify(null); return null; }
+  }
+
+  async function track(event) {
+    if (event !== 'heartbeat' && event !== 'visit' && typeof gtag === 'function' && navigator.doNotTrack !== '1') {
+      const gaEvents = {
+        docx_selected: 'select_content',
+        review_edit: 'qti_review_edit',
+        export: 'file_download'
+      };
+      gtag('event', gaEvents[event] || event, { tool_name: 'docx_to_qti' });
+    }
+    if (disabled) return refresh();
+    try {
+      return await request('POST', {
+        event,
+        session,
+        country: localeCountry.toUpperCase(),
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || ''
+      });
+    } catch (_) {
+      notify(null);
+      return null;
+    }
+  }
+
+  function start() {
+    if (started) return refresh();
+    started = true;
+    return track('visit');
+  }
+
+  return {
+    start,
+    refresh,
+    track,
+    subscribe(listener) {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
+    get disabled() { return disabled; }
+  };
+})();
+window.qtiActivity = qtiActivity;
+
+// ─────────────────────────────────────────────────────────────────────────────
 // UI wiring
 // ─────────────────────────────────────────────────────────────────────────────
 const dropZone    = document.getElementById('dropZone');
@@ -813,6 +1587,12 @@ const msFileNameEl = document.getElementById('msFileName');
 const convertBtn  = document.getElementById('convertBtn');
 const spinner     = document.getElementById('spinner');
 const messageEl   = document.getElementById('message');
+
+function announceConversionState(state, detail = {}) {
+  window.dispatchEvent(new CustomEvent('qti-conversion-state', {
+    detail: { state, ...detail }
+  }));
+}
 
 // ── Prevent browser from navigating/downloading when file is dropped outside a zone ──
 document.addEventListener('dragover', e => e.preventDefault());
@@ -830,7 +1610,7 @@ dropZone.addEventListener('drop', e => {
 fileInput.addEventListener('change', () => setFile(fileInput.files[0]));
 
 let selectedFile = null;
-function setFile(f) {
+function setFile(f, source = 'user') {
   if (!f || !f.name.toLowerCase().endsWith('.docx')) {
     showMsg('error', 'Only .docx files are accepted.');
     return;
@@ -840,6 +1620,8 @@ function setFile(f) {
   dropZone.classList.add('has-file');
   convertBtn.disabled = false;
   messageEl.innerHTML = '';
+  announceConversionState('ready');
+  if (source === 'user') qtiActivity.track('docx_selected');
 }
 
 // ── Mark scheme zone ──────────────────────────────────────────────────────
@@ -889,7 +1671,7 @@ document.querySelectorAll('.ql-btn').forEach(btn => {
 
     try {
       const qpFile = await fetchDocx(qpPath);
-      setFile(qpFile);
+      setFile(qpFile, 'sample');
 
       if (msPath) {
         const msFile = await fetchDocx(msPath);
@@ -922,6 +1704,7 @@ convertBtn.addEventListener('click', async () => {
   convertBtn.disabled = true;
   spinner.style.display = 'block';
   messageEl.innerHTML = '';
+  announceConversionState('converting');
   try {
     // Parse mark scheme first (if provided)
     let msAnswers = {};
@@ -962,8 +1745,10 @@ convertBtn.addEventListener('click', async () => {
                      : forceEssay ? ' (all forced Essay)'
                      : ` — ${mcqCount} MCQ, ${essayCount} Essay`;
     showMsg('', `✅ Parsed ${allQuestions.length} questions${typeNote} — review &amp; edit below, then export`);
+    announceConversionState('review', { questionCount: allQuestions.length });
   } catch (err) {
     showMsg('error', '✗ ' + err.message);
+    announceConversionState('error');
   } finally {
     spinner.style.display = 'none';
     convertBtn.disabled = false;
@@ -1052,6 +1837,30 @@ function getREmbed(el) {
   return el.getAttributeNS(REL,'embed')
       || el.getAttribute('r:embed')
       || '';
+}
+
+// Read Word run content in document order, preserving tabs and line breaks.
+// Many exam-paper templates place a question number or each A/B/C/D option in
+// a separate tab stop.  Reading only <w:t> nodes joins "2" + "An element..."
+// into "2An element...", which hides both the question and option boundaries.
+function wordRunText(run) {
+  let text = '';
+  const visit = node => {
+    for (const child of node.childNodes) {
+      if (child.nodeType !== 1) continue;
+      if (child.namespaceURI === W && child.localName === 't') {
+        text += child.textContent || '';
+      } else if (child.namespaceURI === W && child.localName === 'tab') {
+        text += '\t';
+      } else if (child.namespaceURI === W && (child.localName === 'br' || child.localName === 'cr')) {
+        text += '\n';
+      } else {
+        visit(child);
+      }
+    }
+  };
+  visit(run);
+  return text;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1381,6 +2190,10 @@ function* iterBlockItems(body) {
       }
 
       const parts = [];
+      const runElements = Array.from(child.getElementsByTagNameNS(W,'r'));
+      const runLayoutText = runElements.map(wordRunText).join('');
+      const tabbedQnumMatch = runLayoutText.match(/^\s*(\d{1,3})\t/);
+      const tabbedQnum = tabbedQnumMatch ? tabbedQnumMatch[1] : null;
 
       // Skip runs that are inside <w:drawing> or <w:pict> (canvas/shape label text,
       // not part of the readable paragraph flow).
@@ -1403,7 +2216,7 @@ function* iterBlockItems(body) {
         return text.split('').map(c => hypyMap[c] || c).join('');
       }
 
-      for (const run of child.getElementsByTagNameNS(W,'r')) {
+      for (const run of runElements) {
         if (drawingRunSet.has(run)) continue;  // skip diagram/shape label text
         // Skip deleted-text runs
         if (run.getElementsByTagNameNS(W,'del').length) continue;
@@ -1415,8 +2228,7 @@ function* iterBlockItems(body) {
           continue;
         }
 
-        let text = Array.from(run.getElementsByTagNameNS(W,'t'))
-                        .map(t => t.textContent).join('');
+        let text = wordRunText(run);
         if (!text) continue;
 
         const rPr = run.getElementsByTagNameNS(W,'rPr')[0];
@@ -1431,15 +2243,21 @@ function* iterBlockItems(body) {
           }
 
           const vAlign = rPr.getElementsByTagNameNS(W,'vertAlign')[0];
-          if (vAlign) {
-            const v = getWVal(vAlign);
-            if (v === 'superscript') text = `<sup>${text}</sup>`;
-            if (v === 'subscript')   text = `<sub>${text}</sub>`;
-          }
           const bEl = rPr.getElementsByTagNameNS(W,'b')[0];
           const iEl = rPr.getElementsByTagNameNS(W,'i')[0];
-          if (bEl && getWVal(bEl) !== '0' && getWVal(bEl) !== 'false') text = `<strong>${text}</strong>`;
-          if (iEl && getWVal(iEl) !== '0' && getWVal(iEl) !== 'false') text = `<em>${text}</em>`;
+          // Leave layout separators outside formatting tags so tab-delimited
+          // option groups can be split without producing broken HTML fragments.
+          text = text.split(/([\t\n])/).map(part => {
+            if (part === '\t' || part === '\n' || !part) return part;
+            if (vAlign) {
+              const v = getWVal(vAlign);
+              if (v === 'superscript') part = `<sup>${part}</sup>`;
+              if (v === 'subscript')   part = `<sub>${part}</sub>`;
+            }
+            if (bEl && getWVal(bEl) !== '0' && getWVal(bEl) !== 'false') part = `<strong>${part}</strong>`;
+            if (iEl && getWVal(iEl) !== '0' && getWVal(iEl) !== 'false') part = `<em>${part}</em>`;
+            return part;
+          }).join('');
         }
         parts.push(text);
       }
@@ -1448,7 +2266,7 @@ function* iterBlockItems(body) {
       // Yield if there is text content, or if this paragraph carries list-
       // numbering metadata (so the parser can detect question/option role
       // even when the label is generated by Word, not stored in <w:t>).
-      if (paraText || numPr) yield { type: 'text', value: paraText || '', numPr };
+      if (paraText || numPr) yield { type: 'text', value: paraText || '', numPr, tabbedQnum };
 
       // Images embedded in this paragraph — DrawingML (modern) + VML (legacy)
       for (const blip of child.getElementsByTagNameNS(A,'blip')) {
@@ -1505,8 +2323,7 @@ function* iterBlockItems(body) {
                 runParts.push('$$\\\\text{[equation]}$$');
                 continue;
               }
-              let text = Array.from(run.getElementsByTagNameNS(W,'t'))
-                              .map(t => t.textContent).join('');
+              let text = wordRunText(run);
               if (!text) continue;
               const rPr = run.getElementsByTagNameNS(W,'rPr')[0];
               if (rPr) {
@@ -1520,15 +2337,19 @@ function* iterBlockItems(body) {
                 }
 
                 const vAlign = rPr.getElementsByTagNameNS(W,'vertAlign')[0];
-                if (vAlign) {
-                  const v = getWVal(vAlign);
-                  if (v === 'superscript') text = `<sup>${text}</sup>`;
-                  if (v === 'subscript')   text = `<sub>${text}</sub>`;
-                }
                 const bEl = rPr.getElementsByTagNameNS(W,'b')[0];
                 const iEl = rPr.getElementsByTagNameNS(W,'i')[0];
-                if (bEl && getWVal(bEl) !== '0' && getWVal(bEl) !== 'false') text = `<strong>${text}</strong>`;
-                if (iEl && getWVal(iEl) !== '0' && getWVal(iEl) !== 'false') text = `<em>${text}</em>`;
+                text = text.split(/([\t\n])/).map(part => {
+                  if (part === '\t' || part === '\n' || !part) return part;
+                  if (vAlign) {
+                    const v = getWVal(vAlign);
+                    if (v === 'superscript') part = `<sup>${part}</sup>`;
+                    if (v === 'subscript')   part = `<sub>${part}</sub>`;
+                  }
+                  if (bEl && getWVal(bEl) !== '0' && getWVal(bEl) !== 'false') part = `<strong>${part}</strong>`;
+                  if (iEl && getWVal(iEl) !== '0' && getWVal(iEl) !== 'false') part = `<em>${part}</em>`;
+                  return part;
+                }).join('');
               }
               runParts.push(text);
             }
@@ -1783,21 +2604,27 @@ async function parseDocxToQuestions(file, msAnswers) {
   // We resolve numId → numFmt ('decimal', 'lowerLetter', 'upperLetter', …)
   // per indent-level so the parser can identify question stems vs options.
   const numFormatMap = new Map();   // numId_string → Map(ilvl_string → fmtString)
+  const numStartMap  = new Map();   // numId_string → Map(ilvl_string → starting integer)
   const numXmlFile = docxZip.file('word/numbering.xml');
   if (numXmlFile) {
     const numXmlStr = await numXmlFile.async('string');
     const numXml    = parser.parseFromString(numXmlStr, 'application/xml');
     // Step 1: Build abstractNumId → per-level format map
     const abstractNums = new Map();
+    const abstractStarts = new Map();
     for (const an of numXml.getElementsByTagNameNS(W,'abstractNum')) {
       const anId   = an.getAttributeNS(W,'abstractNumId');
       const levels = new Map();
+      const starts = new Map();
       for (const lvl of an.getElementsByTagNameNS(W,'lvl')) {
         const ilvl  = lvl.getAttributeNS(W,'ilvl');
         const fmtEl = lvl.getElementsByTagNameNS(W,'numFmt')[0];
+        const startEl = lvl.getElementsByTagNameNS(W,'start')[0];
         levels.set(ilvl, fmtEl ? getWVal(fmtEl) : 'decimal');
+        starts.set(ilvl, startEl ? parseInt(getWVal(startEl), 10) || 1 : 1);
       }
       abstractNums.set(anId, levels);
+      abstractStarts.set(anId, starts);
     }
     // Step 2: Map concrete numId → abstractNum levels
     for (const num of numXml.getElementsByTagNameNS(W,'num')) {
@@ -1806,6 +2633,13 @@ async function parseDocxToQuestions(file, msAnswers) {
       if (anIdEl) {
         const anId = getWVal(anIdEl);
         numFormatMap.set(numId, abstractNums.get(anId) || new Map());
+        const starts = new Map(abstractStarts.get(anId) || []);
+        for (const override of num.getElementsByTagNameNS(W,'lvlOverride')) {
+          const ilvl = override.getAttributeNS(W,'ilvl');
+          const startOverride = override.getElementsByTagNameNS(W,'startOverride')[0];
+          if (startOverride) starts.set(ilvl, parseInt(getWVal(startOverride), 10) || 1);
+        }
+        numStartMap.set(numId, starts);
       }
     }
   }
@@ -1846,9 +2680,10 @@ async function parseDocxToQuestions(file, msAnswers) {
   const STANDALONE_OPTION_LABEL_RE = /^(?:[A-D]|[（(]\s*[1-8]\s*[）)]|[1-8][\.\)．]|[\u2474-\u247B]|[\u2460-\u2467])$/i;
   const NUMBERED_SPLIT_OPTION_LABEL_RE = /^(?:[（(]\s*[1-8]\s*[）)]|[1-8][\.\)．]|[\u2474-\u247B]|[\u2460-\u2467])$/i;
   const INLINE_CLOZE_RE = /[Qq](\d{1,3})\s*[＿_\s]*[（(]([^）)]*)[）)]/u;
+  const BRACKETED_SLASH_CLOZE_RE = /[（(]\s*(\d{1,3})\s*[）)]\s*[\[［]\s*([^\]］]+?)\s*[\]］]/gu;
   const SECTION_HEADING_RE = /[一二三四五六七八九十]+、/u;
   // Allow up to 5 uppercase-letter prefix (Word cross-ref codes like "XX23")
-  const QNUM_ONLY   = /^[A-Z]{0,5}(\d{1,3})$/i;   // table first-cell
+  const QNUM_ONLY   = /^[A-Z]{0,5}(\d{1,3})(?:[.]|[．])?$/i;   // table first-cell
   const OPT_CELL_RE = /^([A-D])\s+(.*)/i;  // 'A   text' in a table options row
   const ANSWER_BLANK_RE = /^[\(\（][\s_＿]*[\)\）]$/;
   const ANS_RE      = /^ANSWERS\s*$/i;
@@ -1879,13 +2714,36 @@ async function parseDocxToQuestions(file, msAnswers) {
     return !!compact && ANSWER_BLANK_RE.test(compact);
   }
 
+  function stripTrailingAnswerBlank(text) {
+    return String(text || '')
+      .replace(/[\s\xa0]*[\(（][\s_＿]*[\)）]\s*$/u, '')
+      .trim();
+  }
+
+  function isLikelyAutoNumberedOptionText(text) {
+    const t = stripTrailingAnswerBlank(stripTags(String(text || '')))
+      .replace(/\u3000/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    if (!t) return false;
+    if (/[?？]|\[\s*\d+\s*m\s*\]/i.test(t)) return false;
+    if (/^(what|why|which|how|where|when|who|list|write|tick|give|state|explain)\b/i.test(t)) return false;
+    return t.length <= 90;
+  }
+
   function findQnumInRow(row) {
     for (let i = 0; i < row.length; i++) {
       const plain = cellPlainText(row[i]);
       if (!plain) continue;
-      if (STANDALONE_OPTION_LABEL_RE.test(plain)) return { qnum: null, idx: -1 };
       const qnum = parseQnum(plain);
-      if (qnum !== null) return { qnum, idx: i };
+      if (qnum !== null) {
+        const hasStemAfter = row.slice(i + 1).some(cell => {
+          const t = cellPlainText(cell);
+          return t && !isAnswerBlank(t) && !STANDALONE_OPTION_LABEL_RE.test(t);
+        });
+        if (i === 0 || hasStemAfter) return { qnum, idx: i };
+      }
+      if (STANDALONE_OPTION_LABEL_RE.test(plain)) return { qnum: null, idx: -1 };
       return { qnum: null, idx: -1 };
     }
     return { qnum: null, idx: -1 };
@@ -1978,8 +2836,54 @@ function extractSplitNumberedOptionRow(row) {
   if (labelIdx === -1) return null;
   return {
     labelIdx,
-    text: dedupCells(row.slice(labelIdx + 1)).trim()
+    text: stripTrailingAnswerBlank(dedupCells(row.slice(labelIdx + 1).filter(cell => !isAnswerBlank(cellPlainText(cell)))))
   };
+}
+
+function getStackedNumberLabels(cellText, cellParas = []) {
+  const paras = (cellParas || []).map(cellPlainText).filter(Boolean);
+  const fromParas = paras.filter(t => NUMBERED_SPLIT_OPTION_LABEL_RE.test(t));
+  if (fromParas.length >= 2 && fromParas.length === paras.length) return fromParas;
+
+  const plain = cellPlainText(cellText);
+  const matches = plain.match(/[（(]\s*[1-8]\s*[）)]|[1-8][\.\)．]|[\u2474-\u247B]|[\u2460-\u2467]/g) || [];
+  return matches.length >= 2 && matches.join('') === plain.replace(/\s+/g, '') ? matches : [];
+}
+
+function extractStackedNumberedOptionRow(row, rowParas = []) {
+  if (!row || cellPlainText(row[0])) return null;
+  for (let labelIdx = 1; labelIdx < row.length - 1; labelIdx++) {
+    const labels = getStackedNumberLabels(row[labelIdx], rowParas[labelIdx]);
+    if (labels.length < 2) continue;
+    const optionParas = (rowParas[labelIdx + 1] || [])
+      .map(stripTrailingAnswerBlank)
+      .map(cellPlainText)
+      .filter(Boolean);
+    if (optionParas.length >= labels.length) return optionParas.slice(0, labels.length);
+  }
+  return null;
+}
+
+function extractAnonymousAlternatingMcqTable(rows, cellParas = []) {
+  const found = [];
+  for (let ri = 0; ri + 1 < rows.length; ri++) {
+    const stemRow = rows[ri] || [];
+    const optRow = rows[ri + 1] || [];
+    const opts = extractStackedNumberedOptionRow(optRow, cellParas[ri + 1] || []);
+    if (!opts || opts.length < 2) continue;
+
+    const stemParts = stemRow
+      .slice(1)
+      .map(stripTrailingAnswerBlank)
+      .map(cellPlainText)
+      .filter(t => t && !isAnswerBlank(t));
+    const stem = dedupCells(stemParts);
+    if (!stem || stem.length < 20 || getStackedNumberLabels(stem).length) continue;
+
+    found.push({ stem, options: opts });
+    ri++;
+  }
+  return found.length ? found : null;
 }
 
 function cellPlainText(cell) {
@@ -2084,6 +2988,99 @@ function extractInlineLetteredOptionsFromHtml(htmlText) {
   return { stemHtml, options };
 }
 
+// Extract a full A/B/C/D option row laid out with Word tab stops, e.g.
+// "A\t90 °C\tB\t98 °C\tC\t100 °C\tD\t102 °C".  These are common in
+// compact science MCQ papers and otherwise collapse into one long option.
+function extractTabbedLetterOptions(htmlText) {
+  const raw = String(htmlText || '');
+  if (!raw.includes('\t')) return null;
+
+  const segments = raw.split(/[\t\n]+/).map(s => s.trim()).filter(s => cellPlainText(s));
+  const expected = ['A', 'B', 'C', 'D'];
+  const options = [];
+  let optionIndex = -1;
+
+  for (const segment of segments) {
+    const plain = cellPlainText(segment).toUpperCase();
+    const taggedMarker = segment.match(/^(?:<[^>]+>)*([A-D])(?:<\/[^>]+>)*(.*)$/i);
+    const marker = plain.length === 1 && /^[A-D]$/.test(plain)
+      ? { letter: plain, remainder: '' }
+      : (taggedMarker
+        ? { letter: taggedMarker[1].toUpperCase(), remainder: taggedMarker[2].trim() }
+        : null);
+    if (optionIndex + 1 < expected.length && marker && marker.letter === expected[optionIndex + 1]) {
+      optionIndex += 1;
+      options[optionIndex] = marker.remainder;
+      continue;
+    }
+    if (optionIndex >= 0) {
+      options[optionIndex] = `${options[optionIndex]} ${segment}`.trim();
+    }
+  }
+
+  if (optionIndex !== expected.length - 1 || options.some(opt => !cellPlainText(opt))) return null;
+  return options;
+}
+
+// Compact papers sometimes use bold A/B/C/D runs with inconsistent tabs.
+// Split on the bold markers themselves so "A 6 3 1 B 6 7 1 ..." still
+// becomes four choices even when the last label shares a run with its text.
+function extractBoldLetterOptions(htmlText) {
+  const raw = String(htmlText || '');
+  const markerRe = /<strong>\s*([A-D])\s*<\/strong>/gi;
+  const expected = ['A', 'B', 'C', 'D'];
+  const markers = [];
+  let match;
+  while ((match = markerRe.exec(raw)) !== null) {
+    const letter = match[1].toUpperCase();
+    if (letter !== expected[markers.length]) continue;
+    markers.push({ start:match.index, end:markerRe.lastIndex });
+    if (markers.length === 4) break;
+  }
+  if (markers.length !== 4) return null;
+
+  const options = markers.map((marker, index) => {
+    const end = index + 1 < markers.length ? markers[index + 1].start : raw.length;
+    return raw.slice(marker.end, end).replace(/^[\s\t:;,.]+|[\s\t]+$/g, '').trim();
+  });
+  return options.every(option => cellPlainText(option)) ? options : null;
+}
+
+// A single option may occupy its own paragraph as "<bold>A</bold><TAB>text".
+// Requiring the Word tab and explicit bold marker avoids misreading ordinary
+// sentences such as "A sample ..." as an option.
+function extractSingleTabbedLetterOption(htmlText) {
+  const raw = String(htmlText || '');
+  if (!raw.includes('\t')) return null;
+  const match = raw.match(/^[\s\t]*<strong>\s*([A-D])\s*<\/strong>[\s\t]+([\s\S]+)$/i);
+  if (!match || !cellPlainText(match[2])) return null;
+  return { letter:match[1].toUpperCase(), text:match[2].trim() };
+}
+
+// Detect option matrices with column headings followed by four rows labelled
+// A-D. The label may be in column 0 or after one blank spacer column.
+function extractLetterRowMatrix(rows) {
+  if (!rows || rows.length < 5) return null;
+  const expected = ['A', 'B', 'C', 'D'];
+  for (let labelIdx = 0; labelIdx < Math.min(3, rows[0].length); labelIdx++) {
+    const optionRows = rows.slice(1, 5);
+    if (!optionRows.every((row, index) => cellPlainText(row[labelIdx]).toUpperCase() === expected[index])) continue;
+    const headers = rows[0];
+    const options = optionRows.map(row => {
+      const parts = [];
+      for (let ci = labelIdx + 1; ci < row.length; ci++) {
+        const value = String(row[ci] || '').trim();
+        if (!cellPlainText(value)) continue;
+        const header = cellPlainText(headers[ci]);
+        parts.push(header ? `${header}: ${value}` : value);
+      }
+      return parts.join(' ; ');
+    });
+    if (options.every(option => cellPlainText(option))) return options;
+  }
+  return null;
+}
+
 // Check if individual paragraphs of a question cell contain embedded A/B/C/D options
 // as separate paragraphs (common in H1/H2 papers where options follow the stem in
   // the same table cell, each starting with the option letter).
@@ -2131,6 +3128,35 @@ function extractInlineLetteredOptionsFromHtml(htmlText) {
       if (chunk) opts.push(chunk);
     }
     return opts;
+  }
+
+  function parseSlashOptions(innerTxt) {
+    return String(innerTxt || '')
+      .split(/[\/／]/)
+      .map(part => part.replace(/\u3000/g, ' ').replace(/\s+/g, ' ').trim())
+      .filter(Boolean);
+  }
+
+  function extractBracketedSlashClozes(text) {
+    const source = String(text || '');
+    const clozes = [];
+    BRACKETED_SLASH_CLOZE_RE.lastIndex = 0;
+    for (const m of source.matchAll(BRACKETED_SLASH_CLOZE_RE)) {
+      const qnum = m[1];
+      const opts = parseSlashOptions(m[2]);
+      if (parseInt(qnum, 10) <= MAX_QNUM && opts.length >= 2 && opts.length <= LETTERS.length) {
+        clozes.push({ qnum, opts });
+      }
+    }
+    BRACKETED_SLASH_CLOZE_RE.lastIndex = 0;
+    return clozes;
+  }
+
+  function blankBracketedSlashClozes(text) {
+    BRACKETED_SLASH_CLOZE_RE.lastIndex = 0;
+    const blanked = String(text || '').replace(BRACKETED_SLASH_CLOZE_RE, (_, qnum) => `(${qnum}) ______`);
+    BRACKETED_SLASH_CLOZE_RE.lastIndex = 0;
+    return blanked;
   }
 
   function trimAfterSectionHeading(text) {
@@ -2282,25 +3308,28 @@ function extractInlineLetteredOptionsFromHtml(htmlText) {
   let curQFromText = false;
   let allowImplicitTableOptions = false;
   let pendingLeadTokens = [];
+  let curQAutoListKey = null;
+  let questionSequence = 0;
 
   function currentHasInlineOptions() {
     return !!(curQ && extractInlineOptionsForQuestion(curQ.tokens, curQ.qnum).length);
   }
 
-  function startQuestion(qnum, seedTokens = [], { fromText = false, allowImplicit = false } = {}) {
+  function startQuestion(qnum, seedTokens = [], { fromText = false, allowImplicit = false, autoListKey = null } = {}) {
     const initialTokens = [];
     [...pendingLeadTokens, ...seedTokens].forEach(token => {
       if (!token) return;
       if (token.type === 'text') pushUniqueTextToken(initialTokens, token.value);
       else initialTokens.push(token);
     });
-    curQ = { qnum, tokens: initialTokens };
+    curQ = { qnum, tokens: initialTokens, _sourceOrder: ++questionSequence };
     curOpts = [];
     curOptImages = [];
     allowImplicitTableOptions = allowImplicit;
     pendingLeadTokens = [];
     inSuggestedAnswer = false;
     curQFromText = fromText;
+    curQAutoListKey = autoListKey;
   }
 
   function flushQuestion() {
@@ -2308,6 +3337,19 @@ function extractInlineLetteredOptionsFromHtml(htmlText) {
     let finalTokens = curQ.tokens;
     let finalOpts = [...curOpts];
     let finalOptImages = [...curOptImages];
+    const deferredNumbered = finalTokens.filter(token => token.type === 'deferred-numbered');
+    if (deferredNumbered.length) {
+      if (finalOpts.length) {
+        let itemNumber = 0;
+        finalTokens = finalTokens.map(token => token.type === 'deferred-numbered'
+          ? { type:'text', value:`${++itemNumber}. ${token.value}` }
+          : token);
+      } else {
+        finalTokens = finalTokens.filter(token => token.type !== 'deferred-numbered');
+        finalOpts = deferredNumbered.map(token => token.value);
+        finalOptImages = deferredNumbered.map(() => null);
+      }
+    }
     if (!finalOpts.length) {
       const inlineOpts = extractInlineOptionsForQuestion(curQ.tokens, curQ.qnum);
       if (inlineOpts.length) {
@@ -2324,6 +3366,7 @@ function extractInlineLetteredOptionsFromHtml(htmlText) {
     inSuggestedAnswer = false;
     curQFromText = false;
     allowImplicitTableOptions = false;
+    curQAutoListKey = null;
   }
 
   // ── Resolve answer: MS file takes priority over inline ANSWERS section ──
@@ -2394,6 +3437,40 @@ function extractInlineLetteredOptionsFromHtml(htmlText) {
     if (item.type === 'table') {
       const rows      = item.value;
       if (!rows || !rows.length) continue;
+      const tableText = dedupCells(rows.flat());
+      const tableInlineClozes = [...tableText.matchAll(/[Qq](\d{1,3})\s*[＿_\s]*[（(]([^）)]+)[）)]/gu)]
+        .map(match => ({ qnum:match[1], options:parseInlineClozeOptions((match[2] || '').trim()) }))
+        .filter(entry => parseInt(entry.qnum, 10) <= MAX_QNUM && entry.options.length >= 2 && entry.options.length <= 8);
+      if (tableInlineClozes.length >= 2) {
+        flushQuestion();
+        const sharedStem = tableText.replace(/[Qq](\d{1,3})\s*[＿_\s]*[（(][^）)]*[）)]/gu, (_, qnum) => `Q${qnum}______`);
+        for (const cloze of tableInlineClozes) {
+          startQuestion(cloze.qnum, [], { fromText:true });
+          curQ.tokens.push({ type:'text', value:sharedStem });
+          curOpts = cloze.options;
+          curOptImages = cloze.options.map(() => null);
+          flushQuestion();
+        }
+        continue;
+      }
+      const letterRowMatrix = curQ ? extractLetterRowMatrix(rows) : null;
+      if (letterRowMatrix) {
+        curOpts = letterRowMatrix;
+        curOptImages = letterRowMatrix.map(() => null);
+        continue;
+      }
+      const anonymousMcqTable = !curQ ? extractAnonymousAlternatingMcqTable(rows, item.cellParas || []) : null;
+      if (anonymousMcqTable) {
+        flushQuestion();
+        for (const parsed of anonymousMcqTable) {
+          startQuestion(String(autoQCounter++), [], { fromText: true });
+          curQ.tokens.push({ type: 'text', value: parsed.stem });
+          curOpts = parsed.options;
+          curOptImages = parsed.options.map(() => null);
+          flushQuestion();
+        }
+        continue;
+      }
       const firstRowQ = findQnumInRow(rows[0] || []);
       const detectedQnum = firstRowQ.idx === 0 ? firstRowQ.qnum : null;
       const tableHasEmbeddedQnum = rows.some(row => findQnumInRow(row).qnum !== null);
@@ -2696,12 +3773,53 @@ function extractInlineLetteredOptionsFromHtml(htmlText) {
     // terminates the previous answer section (flushQuestion resets the flag).
     if (plain) {
       if (curQ) {
+        const compactLetterOpts = extractTabbedLetterOptions(raw) || extractBoldLetterOptions(raw);
+        if (compactLetterOpts) {
+          curOpts.push(...compactLetterOpts);
+          curOptImages.push(...compactLetterOpts.map(() => null));
+          continue;
+        }
+        const singleTabbedOpt = extractSingleTabbedLetterOption(raw);
+        if (singleTabbedOpt) {
+          curOpts.push(singleTabbedOpt.text);
+          curOptImages.push(null);
+          continue;
+        }
         const earlyOptMatch = plain.match(OPT_RE);
         if (earlyOptMatch) {
           curOpts.push(earlyOptMatch[1] ?? '');
           curOptImages.push(null);
           continue;
         }
+      }
+
+      const slashClozes = extractBracketedSlashClozes(plain);
+      if (slashClozes.length) {
+        flushQuestion();
+        const stemBase = blankBracketedSlashClozes(plain);
+        for (const cloze of slashClozes) {
+          startQuestion(cloze.qnum, [], { fromText: true });
+          curQ.tokens.push({
+            type: 'text',
+            value: `Select the best answer for blank (${cloze.qnum}). ${stemBase}`
+          });
+          curOpts = cloze.opts;
+          curOptImages = cloze.opts.map(() => null);
+          flushQuestion();
+        }
+        continue;
+      }
+
+      // Strong exam-template signal: a question number in its own run followed
+      // by a Word tab. This recognises "6<TAB>50 cm3 ..." as Question 6 while
+      // preventing the next line "50 cm3 ..." from becoming Question 50.
+      if (item.tabbedQnum && parseInt(item.tabbedQnum, 10) <= MAX_QNUM) {
+        const tabIndex = raw.indexOf('\t');
+        const qbody = (tabIndex >= 0 ? raw.slice(tabIndex + 1) : plain.replace(/^\d+\s+/, '')).trim();
+        flushQuestion();
+        startQuestion(item.tabbedQnum, [], { fromText:true });
+        curQ.tokens.push({ type:'text', value:qbody });
+        continue;
       }
 
       // Question-start variant like "2(a)Write ...". We treat this as a new
@@ -2724,16 +3842,42 @@ function extractInlineLetteredOptionsFromHtml(htmlText) {
         //               regular "1. text" → groups [4]=num
         const qnum = qMatch[1] || qMatch[2] || qMatch[3] || qMatch[4];
         const qtext = qMatch[5];
-        if (parseInt(qnum) <= MAX_QNUM) {
+        const currentQnum = curQ ? parseInt(curQ.qnum, 10) : 0;
+        const implausibleNumericJump = !!qMatch[4] && currentQnum > 0 && parseInt(qnum, 10) > currentQnum + 10;
+        const restartedNumericList = !!qMatch[4] && currentQnum > 0 && parseInt(qnum, 10) <= currentQnum;
+        if (parseInt(qnum) <= MAX_QNUM && !implausibleNumericJump && !restartedNumericList) {
           flushQuestion();           // resets inSuggestedAnswer
           startQuestion(qnum, [], { fromText: true });
           // Strip the leading "Q1." / "Q1)" / "(1)" / "（1）」 / "1." from raw HTML, keep rest
-          const bodyText = raw.replace(/^(?:<[^>]*>)*(?:[Qq]\d+(?:[\.\)\s:]*\s+)?|\(\d+\)|（\d+）|\d+[.)])(?:<\/[^>]*>)*\s*/,'').trim()
+          let bodyText = raw.replace(/^(?:<[^>]*>)*(?:[Qq]\d+(?:[\.\)\s:]*\s+)?|\(\d+\)|（\d+）|\d+[.)])(?:<\/[^>]*>)*\s*/,'').trim()
                         || raw.replace(/^(?:<[^>]*>)*[Qq]?\d+(?:<\/[^>]*>)*\s+/,'').trim()
                         || qtext;
+          // A tab-only formatted run can sit between the bold number and stem.
+          // If the HTML-aware removal left the number behind, fall back to the
+          // already-normalised regex capture instead of showing "2An...".
+          const bodyPlain = stripTags(bodyText).replace(/\s+/g, ' ').trim();
+          if (bodyPlain.match(Q_RE)) bodyText = qtext;
           curQ.tokens.push({ type:'text', value: bodyText });
           continue;
         }
+      }
+
+      // One passage can contain several inline cloze questions (Q16-Q20).
+      // Create one item per cloze while retaining the full shared passage.
+      const inlineClozeMatches = [...plain.matchAll(/[Qq](\d{1,3})\s*[＿_\s]*[（(]([^）)]+)[）)]/gu)]
+        .map(match => ({ qnum:match[1], options:parseInlineClozeOptions((match[2] || '').trim()) }))
+        .filter(entry => parseInt(entry.qnum, 10) <= MAX_QNUM && entry.options.length >= 2 && entry.options.length <= 8);
+      if (inlineClozeMatches.length >= 2) {
+        flushQuestion();
+        const sharedStem = raw.replace(/[Qq](\d{1,3})\s*[＿_\s]*[（(][^）)]*[）)]/gu, (_, qnum) => `Q${qnum}______`);
+        for (const cloze of inlineClozeMatches) {
+          startQuestion(cloze.qnum, [], { fromText:true });
+          curQ.tokens.push({ type:'text', value:sharedStem });
+          curOpts = cloze.options;
+          curOptImages = cloze.options.map(() => null);
+          flushQuestion();
+        }
+        continue;
       }
 
       // Inline Q-prefix for fill-in-the-blank style questions (e.g. Q16(...) or conversational Q26？)
@@ -2812,17 +3956,24 @@ function extractInlineLetteredOptionsFromHtml(htmlText) {
       const cKey   = `${numId}:${ilvl}`;
 
       if (/^decimal/i.test(fmt) && plain) {
-        if (curQFromText && curQ) {
-          // Question stem was detected from plain text (e.g. "Q1 …") — treat
-          // decimal-numPr items as MCQ options (Chinese worksheet style).
-          curOpts.push(plain);
-          curOptImages.push(null);
+        const startMap = numStartMap.get(numId);
+        const configuredStart = (startMap && startMap.get(ilvl)) || 1;
+        const isDifferentAutoOptionList = curQAutoListKey && cKey !== curQAutoListKey && isLikelyAutoNumberedOptionText(plain);
+        if (curQ && configuredStart === 1 && (curQFromText || isDifferentAutoOptionList)) {
+          // Question stem was already active. If this decimal item belongs to
+          // a different Word auto-number list, it may be either a numeric
+          // option list or numbered statements followed by A/B/C/D choices.
+          // Defer that decision until the question is flushed: explicit
+          // lettered choices keep these as numbered stem statements; without
+          // lettered choices, they become the options.
+          curQ.tokens.push({ type:'deferred-numbered', value:stripTrailingAnswerBlank(raw || plain) });
         } else {
           // Auto-numbered question stem (standard exam auto-list style)
-          numCounter.set(cKey, (numCounter.get(cKey) || 0) + 1);
-          const autoQnum = String(numCounter.get(cKey));
+          const autoQnumValue = numCounter.has(cKey) ? numCounter.get(cKey) + 1 : configuredStart;
+          numCounter.set(cKey, autoQnumValue);
+          const autoQnum = String(autoQnumValue);
           flushQuestion();
-          startQuestion(autoQnum);
+          startQuestion(autoQnum, [], { autoListKey: cKey });
           curQ.tokens.push({ type: 'text', value: raw });
         }
         continue;
@@ -2857,10 +4008,17 @@ function extractInlineLetteredOptionsFromHtml(htmlText) {
       '• OR start with a bold label: "Planning Question", "Practice Question", "Additional question"'
     );
 
-  // ── Merge, deduplicate, sort — MCQ wins over structured for same qnum ──
+  // ── Merge, deduplicate, sort — keep the earliest repeated-qnum candidate ─
+  // Later Word auto-lists can restart at 1. Source order preserves the real
+  // question encountered first, regardless of whether it was MCQ or Essay.
   const qByNum = new Map();
-  for (const q of mcq)        qByNum.set(q.qnum, { isMcq: true,  q });
-  for (const q of structured) if (!qByNum.has(q.qnum)) qByNum.set(q.qnum, { isMcq: false, q });
+  const orderedCandidates = [
+    ...mcq.map(q => ({ isMcq:true, q })),
+    ...structured.map(q => ({ isMcq:false, q }))
+  ].sort((a, b) => (a.q._sourceOrder || 0) - (b.q._sourceOrder || 0));
+  for (const candidate of orderedCandidates) {
+    if (!qByNum.has(candidate.q.qnum)) qByNum.set(candidate.q.qnum, candidate);
+  }
 
   const allQuestions = [...qByNum.values()]
     .sort((a, b) => parseInt(a.q.qnum) - parseInt(b.q.qnum))
@@ -2967,6 +4125,14 @@ async function buildQtiZipBlob(allQuestions, resolvedImages) {
 // Global editor state ─────────────────────────────────────────────────────────
 let editorState = null;   // { allQuestions, resolvedImages, imageUrls, baseName }
 
+// Count a burst of typing as one anonymous review-edit event, never per keystroke.
+let reviewEditTimer = null;
+document.getElementById('questionCards').addEventListener('input', event => {
+  if (!event.target.matches('.stem-text, .opt-input, .essay-answer-input')) return;
+  clearTimeout(reviewEditTimer);
+  reviewEditTimer = setTimeout(() => qtiActivity.track('review_edit'), 900);
+});
+
 // Render the full editor after a successful parse ─────────────────────────────
 function renderEditor(allQuestions, resolvedImages, baseName) {
   // Create in-memory blob URLs so we can display images without a server
@@ -3020,6 +4186,7 @@ function buildCard(entry, imageUrls, idx) {
       e.q.optionImages = [null, null, null, null];
     }
     card.replaceWith(buildCard(e, editorState.imageUrls, idx));
+    qtiActivity.track('review_edit');
   });
 
   // ── Stem ────────────────────────────────────────────────────────────
@@ -3133,7 +4300,10 @@ function buildCard(entry, imageUrls, idx) {
       });
       card.classList.toggle('no-answer', !sel.value);
     };
-    sel.addEventListener('change', syncLabels);
+    sel.addEventListener('change', () => {
+      syncLabels();
+      qtiActivity.track('review_edit');
+    });
     syncLabels();
 
     ansRow.appendChild(sel);
@@ -3237,6 +4407,8 @@ document.getElementById('exportBtn').addEventListener('click', async () => {
   try {
     const blob = await buildQtiZipBlob(edited, editorState.resolvedImages);
     triggerDownload(blob, editorState.baseName + '.zip');
+    qtiActivity.track('export');
+    announceConversionState('exported');
     btn.textContent = '✅ Downloaded!';
     setTimeout(() => { btn.textContent = '📦 Export QTI ZIP'; btn.disabled = false; }, 2500);
   } catch (e) {
@@ -3262,6 +4434,7 @@ document.getElementById('resetBtn').addEventListener('click', () => {
   dropZone.classList.remove('has-file');
   msDropZone.classList.remove('has-file');
   convertBtn.disabled = true;
+  announceConversionState('idle');
   window.scrollTo({ top: 0, behavior: 'smooth' });
 });
 </script>
@@ -3330,8 +4503,91 @@ document.getElementById('resetBtn').addEventListener('click', () => {
   </div>
 </div>
 
+<section class="activity-section" id="activityDashboard" aria-labelledby="activityTitle">
+  <div class="activity-heading-row">
+    <div>
+      <h2 id="activityTitle">Live activity &amp; reach</h2>
+      <p class="activity-privacy">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M7 10V7a5 5 0 0 1 10 0v3M6 10h12a1 1 0 0 1 1 1v9H5v-9a1 1 0 0 1 1-1Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 14v2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+        <span>Anonymous, aggregate activity only. Exam papers still remain entirely on each teacher's device—no names, filenames, document contents or IP addresses are stored.</span>
+      </p>
+      <span class="activity-live"><span class="activity-live-dot" aria-hidden="true"></span><span id="activityLiveLabel">Connecting to live activity…</span></span>
+    </div>
+    <div class="activity-filter">
+      <label for="activityMonth">Month</label>
+      <select id="activityMonth" aria-label="Filter activity dashboard by month"></select>
+    </div>
+  </div>
+
+  <div class="activity-metrics" aria-label="Activity totals">
+    <article class="activity-metric">
+      <span class="activity-metric-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+      <span class="activity-metric-label">Active now</span>
+      <strong class="activity-metric-value" id="metricActive">—</strong>
+      <span class="activity-metric-note">Approx. last 5 minutes</span>
+    </article>
+    <article class="activity-metric">
+      <span class="activity-metric-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M3 3v18h18M7 15l4-4 3 3 6-7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+      <span class="activity-metric-label">Visits</span>
+      <strong class="activity-metric-value" id="metricVisits">—</strong>
+      <span class="activity-metric-note">30-minute sessions</span>
+    </article>
+    <article class="activity-metric">
+      <span class="activity-metric-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M6 2h8l4 4v16H6V2Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M14 2v5h5M9 12h6M9 16h6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></span>
+      <span class="activity-metric-label">DOCX selected</span>
+      <strong class="activity-metric-value" id="metricDocx">—</strong>
+      <span class="activity-metric-note">Selection only; never uploaded</span>
+    </article>
+    <article class="activity-metric">
+      <span class="activity-metric-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="m14 4 6 6L8 22H2v-6L14 4Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="m12 6 6 6" stroke="currentColor" stroke-width="1.8"/></svg></span>
+      <span class="activity-metric-label">Review edits</span>
+      <strong class="activity-metric-value" id="metricEdits">—</strong>
+      <span class="activity-metric-note">Grouped edit bursts</span>
+    </article>
+    <article class="activity-metric">
+      <span class="activity-metric-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M12 3v12m0 0 4-4m-4 4-4-4M4 19v2h16v-2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+      <span class="activity-metric-label">QTI exports</span>
+      <strong class="activity-metric-value" id="metricExports">—</strong>
+      <span class="activity-metric-note">Successful ZIP downloads</span>
+    </article>
+  </div>
+
+  <div class="activity-layout">
+    <div class="activity-globe-panel">
+      <h3 class="activity-panel-title">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18" stroke="currentColor" stroke-width="1.5"/></svg>
+        Country reach
+      </h3>
+      <p class="activity-globe-help">Drag to rotate · scroll to zoom · pulses represent real visits</p>
+      <div id="activityGlobe" role="img" tabindex="0" aria-label="Interactive 3D globe showing anonymous visitor countries"></div>
+      <div class="activity-globe-fallback" id="activityGlobeFallback" hidden aria-hidden="true"></div>
+    </div>
+
+    <aside class="activity-side-panel" aria-label="Activity detail">
+      <div class="activity-side-section">
+        <h3 class="activity-panel-title">Top countries by visits</h3>
+        <ol class="activity-country-list" id="activityCountries"></ol>
+        <p class="activity-empty" id="activityCountriesEmpty" hidden>Country activity will appear here as visits accumulate.</p>
+      </div>
+      <div class="activity-side-section">
+        <h3 class="activity-panel-title">Monthly popularity</h3>
+        <div class="activity-trend" id="activityTrend" aria-label="Monthly visit trend"></div>
+      </div>
+      <div class="activity-side-section">
+        <h3 class="activity-panel-title">Recent anonymous activity</h3>
+        <ul class="activity-feed" id="activityFeed"></ul>
+        <p class="activity-empty" id="activityFeedEmpty" hidden>Recent visits and actions will appear here.</p>
+        <p class="activity-status" id="activityStatus" aria-live="polite">Loading aggregate activity…</p>
+      </div>
+    </aside>
+  </div>
+</section>
+
+<script type="module" src="conversion-hero-3d.js"></script>
+<script type="module" src="activity-dashboard.js"></script>
+
 <footer style="text-align:center; padding: 16px 0 10px; color: #999; font-size: 0.78rem; font-family: sans-serif;">
-  Last updated: Thursday, 7 May 2026, 8:36 AM
+  Last updated: Saturday, 22 August 2026
 </footer>
 </body>
 </html>

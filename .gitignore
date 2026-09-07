@@ -5,4 +5,12 @@ __pycache__/
 jobs/
 files/
 .claude/
+.playwright-cli/
 *.zip
+*.mp4
+.env
+.env.*
+*.key
+*.pem
+qti_activity/
+docx_to_qti_activity.json

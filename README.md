@@ -33,21 +33,37 @@ Convert Singapore exam papers (Word `.docx`) into IMS QTI 2.1 packages ready to 
 - **Image extraction** — images embedded in table cells are extracted and bundled in the output ZIP
 - **Rich text preservation** — superscript, subscript, bold, and italic formatting (e.g. `v²`, `10⁻⁶`) is retained via HTML tags in QTI item stems
 - **Filename passthrough** — output ZIP uses the same name as the input file (e.g. `2022 JC2 H1 Physics P1.docx` → `2022 JC2 H1 Physics P1.zip`)
-- **Two usage modes** — Flask web server for local/hosted use, or a single self-contained HTML file for fully offline use (no server required)
+- **Two usage modes** — Flask web server for Python-based conversion, or a browser-side static application that keeps document contents on the user's device
+- **Human-in-the-loop review** — inspect and edit detected stems, options, answers, question types and images before exporting
+- **Interactive workflow visualisation** — a responsive Three.js scene follows the real document-ready, parsing, review and export states
+- **Optional anonymous activity dashboard** — aggregate visits and converter actions without storing names, filenames, document contents or IP addresses
 
 ---
 
 ## Usage
 
-### Option A — Static HTML (no install required)
+### Option A — Browser-side application
 
-1. Open `docx_to_qti.html` in any modern browser
-2. Drop your question paper `.docx` onto the main drop zone
-3. Optionally drop the matching mark scheme `.docx` onto the second drop zone
-4. Click **Convert Document**
-5. The QTI ZIP downloads automatically
+1. Serve the repository with a small local web server (ES modules require HTTP rather than `file://`):
 
-No Python, no server, no internet connection needed.
+   ```bash
+   python -m http.server 8080
+   ```
+
+2. Open [http://localhost:8080/docx_to_qti.html](http://localhost:8080/docx_to_qti.html)
+3. Drop your question paper `.docx` onto the main drop zone
+4. Optionally drop the matching mark scheme `.docx` onto the second drop zone
+5. Click **Convert Document**, review the detected questions, then export the QTI ZIP
+
+The document is parsed in the browser. It is not uploaded to the analytics endpoint or the Flask converter. The page currently loads JSZip and web fonts from public CDNs, so an internet connection is needed on first load unless those dependencies are self-hosted.
+
+To test the optional live activity dashboard, use PHP 8 or later:
+
+```bash
+php -S 127.0.0.1:8080
+```
+
+Set `QTI_ACTIVITY_DIR` to a writable directory outside the public web root in production. If PHP is unavailable, the converter still works and the dashboard reports that live activity is unavailable.
 
 ---
 
@@ -161,7 +177,11 @@ Rows of `[part label, answer text, marks]`:
 QTIconvertertool/
 ├── app.py               # Flask server entry point
 ├── converter.py         # Core DOCX parser and QTI builder (Python)
-├── docx_to_qti.html     # Self-contained browser-side converter (JavaScript + JSZip)
+├── docx_to_qti.html     # Browser-side converter and review interface
+├── conversion-hero-3d.js # State-aware Three.js conversion visualisation
+├── activity-dashboard.js # Anonymous aggregate activity UI and 3D globe
+├── activity.php         # Optional privacy-preserving aggregate endpoint
+├── vendor/              # Pinned Three.js runtime and earth texture
 ├── templates/
 │   └── index.html       # Flask frontend with dual drop zones
 ├── static/
@@ -181,6 +201,19 @@ QTIconvertertool/
 
 ### Browser (static HTML)
 - [JSZip](https://stuk.github.io/jszip/) — loaded from CDN, used to read `.docx` files client-side
+- [Three.js](https://threejs.org/) r185 — vendored locally for the conversion visualisation and country-reach globe
+
+### Optional analytics endpoint
+- PHP 8+
+- A writable private directory configured through `QTI_ACTIVITY_DIR`
+
+---
+
+## Development and contributions
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the development workflow, validation commands and privacy requirements. Generated QTI packages, exam papers, analytics data, credentials and local media are intentionally excluded from source control.
+
+The page also links to a larger catalogue of community-contributed samples hosted on the live site. Those exam resources are not copied into this source-focused repository; the converter itself and the small tracked regression fixtures work independently of those downloads.
 
 ---
 
@@ -206,7 +239,7 @@ MIT License. Free to use, modify, and distribute.
 
 The static HTML version is deployed at:
 
-**https://iwant2study.org/lookangejss/QTIlowJunHua/docx_to_qti.html**
+**https://iwant2study.moe.edu.sg/lookangejss/QTIlowJunHua/docx_to_qti.html**
 
 No installation required — open in any modern browser and convert directly.
 
