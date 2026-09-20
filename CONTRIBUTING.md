@@ -30,6 +30,16 @@ Open `http://localhost:8080/docx_to_qti.html`. For the optional activity endpoin
 php -S 127.0.0.1:8080
 ```
 
+With the HTTP server running, exercise every tracked `.docx` fixture through the browser parser and QTI ZIP builder:
+
+```powershell
+npx --yes --package @playwright/cli playwright-cli -s=qti-regression open http://127.0.0.1:8080/docx_to_qti.html
+npx --yes --package @playwright/cli playwright-cli -s=qti-regression run-code --filename tests/browser_docx_batch_regression.js
+npx --yes --package @playwright/cli playwright-cli -s=qti-regression eval "() => window.__qtiBatchRegressionResults"
+```
+
+Every row should report `ok: true`. Question-paper rows also verify that the generated ZIP contains one QTI item per parsed question, all extracted assets, valid image references, `imsmanifest.xml`, and `assessment_test.xml`.
+
 ## Source boundaries
 
 - `converter.py`, `parser.py` and `qti_generator.py` contain the Python conversion path.

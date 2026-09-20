@@ -1839,6 +1839,43 @@ function getREmbed(el) {
       || '';
 }
 
+// Resolve an OPC relationship target against its source part. Word normally
+// stores images below word/media/, but valid packages may use root-relative
+// targets such as /media/image.png or parent-relative targets such as
+// ../media/image.png. JSZip keys never begin with a slash.
+function resolveOpcPartPath(sourcePart, target) {
+  const cleanSource = String(sourcePart || '').replace(/\\/g, '/').replace(/^\/+/, '');
+  const cleanTarget = String(target || '').replace(/\\/g, '/').split(/[?#]/, 1)[0];
+  if (!cleanTarget || /^[a-z][a-z0-9+.-]*:/i.test(cleanTarget)) return null;
+
+  const sourceDir = cleanSource.includes('/')
+    ? cleanSource.slice(0, cleanSource.lastIndexOf('/') + 1)
+    : '';
+  const combined = cleanTarget.startsWith('/')
+    ? cleanTarget.slice(1)
+    : sourceDir + cleanTarget;
+  const parts = [];
+  for (const segment of combined.split('/')) {
+    if (!segment || segment === '.') continue;
+    if (segment === '..') {
+      if (!parts.length) return null;
+      parts.pop();
+    } else {
+      parts.push(segment);
+    }
+  }
+  return parts.join('/') || null;
+}
+
+function parseDocxXml(xmlText) {
+  // Some Word producers write a UTF-8 BOM into XML parts. DOMParser treats a
+  // leading BOM in a JavaScript string as content before the root element.
+  const cleanXml = String(xmlText || '')
+    .replace(/^\uFEFF/, '')
+    .replace(/^\u00EF\u00BB\u00BF/, '');
+  return new DOMParser().parseFromString(cleanXml, 'application/xml');
+}
+
 // Read Word run content in document order, preserving tabs and line breaks.
 // Many exam-paper templates place a question number or each A/B/C/D option in
 // a separate tab stop.  Reading only <w:t> nodes joins "2" + "An element..."
@@ -1920,10 +1957,9 @@ function normalizeMcqAnswerValue(raw) {
 async function parseMarkScheme(msFile) {
   const buf    = await msFile.arrayBuffer();
   const zip    = await JSZip.loadAsync(buf);
-  const parser = new DOMParser();
 
   const docStr = await zip.file('word/document.xml').async('string');
-  const xmlDoc = parser.parseFromString(docStr, 'application/xml');
+  const xmlDoc = parseDocxXml(docStr);
 
   const answers = {};
 
@@ -2018,10 +2054,9 @@ async function parseMarkScheme(msFile) {
 async function parseMarkSchemeEnhanced(msFile) {
   const buf = await msFile.arrayBuffer();
   const zip = await JSZip.loadAsync(buf);
-  const parser = new DOMParser();
 
   const docStr = await zip.file('word/document.xml').async('string');
-  const xmlDoc = parser.parseFromString(docStr, 'application/xml');
+  const xmlDoc = parseDocxXml(docStr);
 
   const answers = {};
   const appendStructuredAnswer = (qnum, label, text) => {
@@ -2554,11 +2589,10 @@ async function parseDocxToQuestions(file, msAnswers) {
 
   const buf     = await file.arrayBuffer();
   const docxZip = await JSZip.loadAsync(buf);
-  const parser  = new DOMParser();
 
   // ── Parse document.xml ──────────────────────────────────────────────
   const docStr = await docxZip.file('word/document.xml').async('string');
-  const xmlDoc = parser.parseFromString(docStr, 'application/xml');
+  const xmlDoc = parseDocxXml(docStr);
   const body   = xmlDoc.getElementsByTagNameNS(W,'body')[0];
   if (!body) throw new Error('Cannot find document body — is this a valid .docx file?');
 
@@ -2590,9 +2624,10 @@ async function parseDocxToQuestions(file, msAnswers) {
   const relsFile = docxZip.file('word/_rels/document.xml.rels');
   if (relsFile) {
     const relsStr = await relsFile.async('string');
-    const relsDoc = parser.parseFromString(relsStr, 'application/xml');
+    const relsDoc = parseDocxXml(relsStr);
     for (const r of relsDoc.getElementsByTagName('Relationship')) {
-      if ((r.getAttribute('Type')||'').includes('image'))
+      if ((r.getAttribute('Type')||'').includes('image')
+          && (r.getAttribute('TargetMode')||'').toLowerCase() !== 'external')
         imageRelTarget[r.getAttribute('Id')] = r.getAttribute('Target');
     }
   }
@@ -2608,7 +2643,7 @@ async function parseDocxToQuestions(file, msAnswers) {
   const numXmlFile = docxZip.file('word/numbering.xml');
   if (numXmlFile) {
     const numXmlStr = await numXmlFile.async('string');
-    const numXml    = parser.parseFromString(numXmlStr, 'application/xml');
+    const numXml    = parseDocxXml(numXmlStr);
     // Step 1: Build abstractNumId → per-level format map
     const abstractNums = new Map();
     const abstractStarts = new Map();
@@ -2652,9 +2687,26 @@ async function parseDocxToQuestions(file, msAnswers) {
     if (resolvedImages[rId]) return resolvedImages[rId].filename;
     const target = imageRelTarget[rId];
     if (!target) return null;
-    const entry = docxZip.file('word/' + target);
+    const targets = [target];
+    try {
+      const decoded = decodeURI(target);
+      if (decoded !== target) targets.push(decoded);
+    } catch (_) { /* retain the original package target */ }
+    let partPath = null;
+    let entry = null;
+    for (const candidate of targets) {
+      const resolved = resolveOpcPartPath('word/document.xml', candidate);
+      if (!resolved) continue;
+      const candidateEntry = docxZip.file(resolved);
+      if (candidateEntry) {
+        partPath = resolved;
+        entry = candidateEntry;
+        break;
+      }
+    }
     if (!entry) return null;
-    const ext      = (target.split('.').pop() || 'jpg').toLowerCase();
+    const extMatch = partPath.match(/\.([a-z0-9]+)$/i);
+    const ext      = extMatch ? extMatch[1].toLowerCase() : 'jpg';
     const filename = `img_${imgCounter++}.${ext}`;
     const data     = await entry.async('uint8array');
     resolvedImages[rId] = { filename, data };

@@ -186,6 +186,8 @@ QTIconvertertool/
 │   └── index.html       # Flask frontend with dual drop zones
 ├── static/
 │   └── sample_doc.png   # Sample document screenshot shown in UI
+├── tests/
+│   └── browser_docx_batch_regression.js # Browser parser/export regression harness
 ├── requirements.txt     # Python dependencies
 └── Procfile             # For deployment on Heroku / Render
 ```
