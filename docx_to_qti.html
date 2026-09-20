@@ -759,6 +759,7 @@
     }
     .faq-tag.platform { background: #fef9c3; color: #854d0e; }
     .faq-tag.workaround { background: #dcfce7; color: #15803d; }
+    .faq-tag.privacy { background: #dbeafe; color: #1d4ed8; }
 
     /* ── Quick-load dev bar ──────────────────────────────────────────── */
     #quickLoad {
@@ -4494,6 +4495,35 @@ document.getElementById('resetBtn').addEventListener('click', () => {
   <div class="faq-section">
     <h2>❓ Frequently Asked Questions</h2>
     <p class="faq-subtitle">Common questions from teachers using this converter with SLS.</p>
+
+    <details class="faq-item">
+      <summary>Are my Word files uploaded, stored, or visible to anyone else?</summary>
+      <div class="faq-body">
+        <p>
+          <strong>No document is uploaded to the converter server.</strong> When you choose a
+          <code>.docx</code> file, your browser reads it directly from your device. Parsing the
+          document, extracting its images, reviewing the questions, and creating the QTI ZIP all
+          happen locally in your browser's memory. The Word file, its filename, question text,
+          answers, and images are not sent to or retained by this website.
+        </p>
+        <p>
+          The page may send small <strong>anonymous activity events</strong> so teachers can see
+          how widely the tool is being used. These events contain only an action label (such as
+          page visit, document selected, or ZIP exported), a random anonymous session identifier,
+          and broad country/time-zone information. They never contain document contents or
+          filenames. Browser “Do Not Track” disables this activity reporting.
+        </p>
+        <p>
+          <strong>Good practice:</strong> use the official converter URL, protect files downloaded
+          to your device, and follow your school's rules for sensitive assessment material. If
+          required by your organisation, use practice or anonymised questions.
+        </p>
+        <p>
+          <span class="faq-tag privacy">Browser-only document processing</span>
+          <span class="faq-tag workaround">No document retained by the website</span>
+        </p>
+      </div>
+    </details>
 
     <details class="faq-item">
       <summary>Why do multipart questions get split into separate questions after import?</summary>
